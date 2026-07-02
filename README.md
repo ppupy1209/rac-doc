@@ -85,6 +85,8 @@ curl http://localhost:8080/actuator/health      # {"status":"UP"}
 
 종료: `docker compose down` (데이터까지 초기화: `docker compose down -v`)
 
+> **포트 충돌 시**: 로컬에 이미 MySQL(3306)·Grafana(3000) 등이 떠 있으면 `.env.example`을 `.env`로 복사해 호스트 포트만 바꾸세요(컨테이너 내부는 그대로). 예: `MYSQL_PORT=13306`, `GRAFANA_PORT=3001`.
+
 ### API 사용 예시
 
 ```bash
