@@ -109,15 +109,27 @@ curl -X POST http://localhost:8080/api/ask \
 > 측정값은 로컬 하드웨어(특히 Ollama 성능)에 좌우되므로 **실측치**를 기입합니다. 방향성과 해석이 핵심입니다.
 
 ### ① Virtual Threads로 I/O 바운드 처리량 개선
-`/api/ask`는 임베딩·LLM 호출로 대부분의 시간을 대기한다. `spring.threads.virtual.enabled` 토글로 플랫폼 스레드풀과 Virtual Threads를 A/B 비교했다.
+I/O 대기가 많은 요청에서 플랫폼 스레드풀 대비 처리량이 얼마나 오르는지 측정했다.
+실제 `/api/ask`는 Ollama(LLM)가 병목이라 스레드 효과가 가려지므로, **"느린 외부 I/O 대기(200ms)"만 순수 재현하는 통제 엔드포인트** `/api/bench/io`로 변수를 격리했다. `spring.threads.virtual.enabled` 토글로 A/B 비교.
 
 ```bash
-# 부하 비교 (k6)
-SPRING_THREADS_VIRTUAL_ENABLED=false docker compose up --build -d app && k6 run bench/ask-load.js
-SPRING_THREADS_VIRTUAL_ENABLED=true  docker compose up --build -d app && k6 run bench/ask-load.js
+# 부하 비교 (k6 — 설치 불필요, Docker로 실행)
+docker compose up -d --force-recreate app                                 # 가상 스레드 OFF (기본)
+docker run --rm -i --network rag-doc-service_default -e BASE=http://app:8080 grafana/k6 run - < bench/io-load.js
+
+VTHREADS=true docker compose up -d --force-recreate app                   # 가상 스레드 ON
+docker run --rm -i --network rag-doc-service_default -e BASE=http://app:8080 grafana/k6 run - < bench/io-load.js
 ```
-- 결과: 동시 200 질의 처리량 `___ → ___ req/s`, p99 `___ → ___ ms` *(측정 후 기입)*
-- 포인트: pinning(`synchronized` 내 blocking)을 피해 이점 확보 — 상세 [`docs/LEARNING-virtual-threads.md`](docs/LEARNING-virtual-threads.md)
+
+**측정 결과** (로컬, 500 동시 사용자 · 20초, 엔드포인트 대기 200ms):
+
+| 지표 | 플랫폼 스레드 (OFF) | 가상 스레드 (ON) |
+|---|---|---|
+| 처리량 | 989 req/s | **2,416 req/s** (약 2.4배) |
+| p99 응답 | 604 ms | **209 ms** |
+| 평균 응답 | 498 ms | 201 ms |
+
+**해석:** 플랫폼 스레드는 기본 200개라 500명이 동시에 오면 300명이 큐에서 대기 → 처리량이 막히고 응답이 부풀었다. 가상 스레드는 대기 중 캐리어를 반납해 수백 개를 동시에 처리 → 처리량 2.4배, 응답시간은 순수 작업시간(200ms)에 근접. 상세 [`docs/LEARNING-virtual-threads.md`](docs/LEARNING-virtual-threads.md)
 
 ### ② Spring AI + RAG 파이프라인
 질문 임베딩 → 유사 청크 검색 → "컨텍스트만 근거로 답하라" 프롬프트 조립 → LLM. 문서에 없는 질문은 "모른다"고 답하도록 설계(환각 억제). 상세 [`docs/LEARNING-rag.md`](docs/LEARNING-rag.md)

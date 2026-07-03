@@ -8,7 +8,7 @@ services:
       DB_USERNAME: ragdoc
       DB_PASSWORD: ragdoc
       OLLAMA_BASE_URL: http://ollama:11434
-      SPRING_THREADS_VIRTUAL_ENABLED: false
+      SPRING_THREADS_VIRTUAL_ENABLED: ${VTHREADS:-false}
     depends_on:
       mysql:
         condition: service_healthy
