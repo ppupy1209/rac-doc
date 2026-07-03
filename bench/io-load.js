@@ -11,6 +11,7 @@ import http from 'k6/http';
 import { check } from 'k6';
 
 const BASE = __ENV.BASE || 'http://app:8080';
+const ENDPOINT = __ENV.ENDPOINT || '/api/bench/downstream'; // 현실적 다운스트림 호출 (비교용 순수대기는 /api/bench/io)
 const DELAY = __ENV.DELAY || '200';
 
 export const options = {
@@ -20,6 +21,6 @@ export const options = {
 };
 
 export default function () {
-  const res = http.get(`${BASE}/api/bench/io?delayMs=${DELAY}`);
+  const res = http.get(`${BASE}${ENDPOINT}?delayMs=${DELAY}`);
   check(res, { 'status 200': (r) => r.status === 200 });
 }

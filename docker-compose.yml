@@ -9,10 +9,13 @@ services:
       DB_PASSWORD: ragdoc
       OLLAMA_BASE_URL: http://ollama:11434
       SPRING_THREADS_VIRTUAL_ENABLED: ${VTHREADS:-false}
+      DOWNSTREAM_URL: http://httpbin:8080
     depends_on:
       mysql:
         condition: service_healthy
       ollama:
+        condition: service_started
+      httpbin:
         condition: service_started
 
   mysql:
@@ -38,6 +41,10 @@ services:
       - "11434:11434"
     volumes:
       - ollama-models:/root/.ollama
+
+  # study ① 측정용 다운스트림 목 서비스 (/delay/{초} 로 지연 응답). 내부 네트워크 전용.
+  httpbin:
+    image: mccutchen/go-httpbin:v2.15.0
 
   prometheus:
     image: prom/prometheus
