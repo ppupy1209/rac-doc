@@ -32,3 +32,9 @@ management:
   endpoint:
     health:
       show-details: always
+  metrics:
+    tags:
+      application: rag-doc-service
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true   # p99 등 히스토그램 지표(_bucket) 생성 → Grafana에서 백분위 계산

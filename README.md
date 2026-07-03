@@ -148,7 +148,9 @@ docker run --rm -i --network rag-doc-service_default -e BASE=http://app:8080 gra
 | 1번째 (miss) | 8,139 ms | 1회 | false |
 | 2번째 (hit) | **0 ms** | **0회** | true |
 
-즉 반복 질의는 8초 LLM 호출을 **0ms·0회**로 줄인다(비용·부하 제거). 관측: `http://localhost:9090`(Prometheus)에서 `cache_gets_total{cache="query_cache"}` 조회, `http://localhost:3001`(Grafana)에서 대시보드로 확인.
+즉 반복 질의는 8초 LLM 호출을 **0ms·0회**로 줄인다(비용·부하 제거).
+
+**관측성 대시보드** ([`rag-observability.json`](grafana/provisioning/dashboards/rag-observability.json)) — 부하 걸린 시스템을 한 화면에서 관측한다: 처리량(req/s), 응답 p95/p99, **JVM 라이브 스레드 수**, 힙 메모리, CPU, 캐시 히트/미스 6개 패널. `http://localhost:3001` → "RAG 서비스 관측 대시보드". 부하 테스트(k6, `bench/io-load.js`)를 걸며 지켜보면 처리량이 치솟고 가상 스레드 ON/OFF에 따라 스레드 수 곡선이 달라지는 걸 실시간으로 볼 수 있다 — study ①의 결과가 그래프로 재현된다. (p99 백분위는 `management.metrics.distribution.percentiles-histogram`로 히스토그램 지표를 켜서 계산)
 
 ---
 
