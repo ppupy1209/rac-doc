@@ -49,9 +49,13 @@ services:
   httpbin:
     image: mccutchen/go-httpbin:v2.15.0
 
-  # study ④ 분산 캐시 (질의 응답 캐싱). 내부 네트워크 전용.
+  # study ④ 분산 캐시 (질의 응답 캐싱).
   redis:
     image: redis:7-alpine
+    ports:
+      - "${REDIS_HOST_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
 
   prometheus:
     image: prom/prometheus
@@ -73,3 +77,4 @@ services:
 volumes:
   mysql-data:
   ollama-models:
+  redis-data:
