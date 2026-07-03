@@ -126,27 +126,27 @@ curl -X POST http://localhost:8080/api/ask \
 > 측정값은 로컬 하드웨어(특히 Ollama 성능)에 좌우되므로 **실측치**를 기입합니다. 방향성과 해석이 핵심입니다.
 
 ### ① Virtual Threads로 I/O 바운드 처리량 개선
-실제 백엔드에서 가장 흔한 I/O 패턴, 즉 **API가 다른 서비스(다운스트림)를 HTTP로 호출하고 응답을 기다리는 상황**을 재현해 측정했다. `/api/bench/downstream`가 200ms 지연 응답하는 목 서비스(go-httpbin)를 실제 네트워크로 호출하고, 호출 스레드는 응답이 올 때까지 소켓에서 blocking 한다. `spring.threads.virtual.enabled` 토글로 A/B 비교.
-(실제 `/api/ask`는 Ollama가 병목이라 스레드 효과가 가려지므로, 다운스트림 지연만 통제해 변수를 격리했다. `/api/bench/io`는 네트워크 없이 대기만 하는 단순 비교용.)
+실무의 **오케스트레이션(BFF/게이트웨이) 패턴**을 재현해 측정했다. `/api/bench/orchestrate`는 한 요청을 처리하려고 여러 다운스트림 서비스를 순차 호출하고 DB도 조회한다(인증 확인 → 문서 메타 조회(DB) → 관련 자료 보강 → 감사 로그). 각 단계가 실제 네트워크 I/O라 응답을 기다리는 동안 요청 처리 스레드가 묶인다. `spring.threads.virtual.enabled` 토글로 A/B 비교.
+(다운스트림은 go-httpbin으로 흉내 낸다. 실제 `/api/ask`는 Ollama가 병목이라 스레드 효과가 가려지므로 제외했다. 더 단순한 비교용으로 `/api/bench/downstream`(단일 호출)과 `/api/bench/io`(순수 대기)도 있다.)
 
 ```bash
 # 부하 비교 (k6, 설치 없이 Docker로 실행)
 docker compose up -d --force-recreate app                                 # 가상 스레드 OFF (기본)
-docker run --rm -i --network rag-doc-service_default -e BASE=http://app:8080 grafana/k6 run - < bench/io-load.js
+docker run --rm -i --network rag-doc-service_default -e BASE=http://app:8080 grafana/k6 run - < bench/orchestrate-load.js
 
 VTHREADS=true docker compose up -d --force-recreate app                   # 가상 스레드 ON
-docker run --rm -i --network rag-doc-service_default -e BASE=http://app:8080 grafana/k6 run - < bench/io-load.js
+docker run --rm -i --network rag-doc-service_default -e BASE=http://app:8080 grafana/k6 run - < bench/orchestrate-load.js
 ```
 
-**측정 결과** (로컬, 500 동시 사용자 · 20초, 다운스트림 200ms 지연):
+**측정 결과** (로컬, 500 동시 사용자 · 20초, 요청당 다운스트림 3회 × 120ms + DB 조회):
 
 | 지표 | 플랫폼 스레드 (OFF) | 가상 스레드 (ON) |
 |---|---|---|
-| 처리량 | 978 req/s | **2,440 req/s** (약 2.5배) |
-| p99 응답 | 602 ms | **213 ms** |
-| 평균 응답 | 504 ms | 203 ms |
+| 처리량 | 538 req/s | **1,257 req/s** (약 2.3배) |
+| 평균 응답 | 895 ms | **382 ms** |
+| p99 응답 | 1.07 s | **902 ms** |
 
-**해석:** 플랫폼 스레드는 기본 200개라 500명이 동시에 오면 나머지가 큐에서 대기하므로 처리량이 막히고 p99가 602ms까지 부풀었다. 가상 스레드는 다운스트림 응답을 기다리는 동안 캐리어를 반납해 수백 개 요청을 동시에 처리하므로 처리량이 2.5배가 되고, p99는 큐 대기가 사라져 다운스트림 지연(200ms)에 근접한다. **부하 중 JVM 라이브 스레드 수도 OFF ~350에서 ON ~220으로 감소**했는데, 이는 가상 스레드가 Tomcat 요청 처리 스레드를 걷어낸 결과다(남은 스레드는 다운스트림 HttpClient 자체 스레드풀). 상세 [`docs/LEARNING-virtual-threads.md`](docs/LEARNING-virtual-threads.md)
+**해석:** 플랫폼 스레드는 기본 200개라 500명이 동시에 오면 나머지가 큐에서 대기하므로 처리량이 막히고 평균 응답이 895ms까지 부풀었다. 가상 스레드는 다운스트림 응답을 기다리는 동안 캐리어를 반납해 수백 개 요청을 동시에 처리하므로 처리량이 2.3배가 되고, 평균 응답은 큐 대기가 사라져 실제 작업시간(약 360ms)에 근접한다. **부하 중 JVM 라이브 스레드 수도 OFF ~350에서 ON ~220으로 감소**했는데, 이는 가상 스레드가 Tomcat 요청 처리 스레드를 걷어낸 결과다(남은 스레드는 다운스트림 HttpClient 자체 스레드풀). 상세 [`docs/LEARNING-virtual-threads.md`](docs/LEARNING-virtual-threads.md)
 
 **부하 중 JVM 라이브 스레드 수** (Grafana, 500 동시 사용자):
 
