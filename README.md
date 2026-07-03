@@ -146,8 +146,13 @@ docker run --rm -i --network rag-doc-service_default -e BASE=http://app:8080 gra
 
 **해석:** 플랫폼 스레드는 기본 200개라 500명이 동시에 오면 나머지가 큐에서 대기하므로 처리량이 막히고 p99가 602ms까지 부풀었다. 가상 스레드는 다운스트림 응답을 기다리는 동안 캐리어를 반납해 수백 개 요청을 동시에 처리하므로 처리량이 2.5배가 되고, p99는 큐 대기가 사라져 다운스트림 지연(200ms)에 근접한다. **부하 중 JVM 라이브 스레드 수도 OFF ~350에서 ON ~220으로 감소**했는데, 이는 가상 스레드가 Tomcat 요청 처리 스레드를 걷어낸 결과다(남은 스레드는 다운스트림 HttpClient 자체 스레드풀). 상세 [`docs/LEARNING-virtual-threads.md`](docs/LEARNING-virtual-threads.md)
 
-<!-- 부하 중 JVM 라이브 스레드: OFF(~350) vs ON(~220) 스크린샷을 docs/images 에 저장 후 아래 주석 해제 -->
-<!-- ![Virtual Threads OFF vs ON 라이브 스레드](docs/images/vthreads-threads-off-on.png) -->
+**부하 중 JVM 라이브 스레드 수** (Grafana, 500 동시 사용자):
+
+| 가상 스레드 OFF (~350) | 가상 스레드 ON (~220) |
+|:---:|:---:|
+| ![가상 스레드 OFF 스레드 수](docs/images/vthreads-off-grafana.png) | ![가상 스레드 ON 스레드 수](docs/images/vthreads-on-grafana.png) |
+
+같은 500명 부하인데 스레드 곡선이 확연히 다르다. 가상 스레드는 Tomcat 요청 처리 스레드를 걷어내 더 적은 스레드로 더 높은 처리량을 낸다.
 
 ### ② Spring AI + RAG 파이프라인
 질문 임베딩 → 유사 청크 검색 → "컨텍스트만 근거로 답하라" 프롬프트 조립 → LLM. 문서에 없는 질문은 "모른다"고 답하도록 설계(환각 억제). 상세 [`docs/LEARNING-rag.md`](docs/LEARNING-rag.md)
