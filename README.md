@@ -160,8 +160,18 @@ docker run --rm -i --network rag-doc-service_default -e BASE=http://app:8080 gra
 질문 임베딩 → 유사 청크 검색 → "컨텍스트만 근거로 답하라" 프롬프트 조립 → LLM. 문서에 없는 질문은 "모른다"고 답하도록 설계(환각 억제). 상세 [`docs/LEARNING-rag.md`](docs/LEARNING-rag.md)
 
 ### ③ MySQL 벡터 검색 최적화
-현재 baseline은 전체 청크 임베딩을 읽어 애플리케이션에서 코사인 유사도를 계산하는 **O(N) 전수 스캔**([`SearchService`](src/main/java/com/yeonwoo/ragdoc/search/SearchService.java)의 `study #3` 지점). 후보 축소·정규화 인메모리 인덱스 등으로 최적화하고 응답시간을 비교한다.
-- 결과: N=___ 청크에서 검색 응답 `___ → ___ ms` *(측정 후 기입)*
+baseline은 검색마다 전체 청크를 DB에서 읽고 임베딩 JSON을 파싱해 코사인을 계산하는 **O(N) 전수 스캔**이다([`SearchService`](src/main/java/com/yeonwoo/ragdoc/search/SearchService.java)). 데이터가 늘수록 선형으로 느려진다. 최적화는 **인메모리 벡터 인덱스**([`InMemoryVectorIndex`](src/main/java/com/yeonwoo/ragdoc/search/InMemoryVectorIndex.java))로, 임베딩을 앱 시작 시 한 번 메모리에 올려 정규화해 두고 검색은 메모리 내 내적으로 처리한다. 본문/제목은 상위 K건만 DB에서 가져온다.
+
+**측정 결과** (청크 20,002개, 검색 평균):
+
+| 방식 | 검색 응답 |
+|---|---|
+| baseline (DB 전수 스캔) | 6,458 ms |
+| 인메모리 인덱스 | **25 ms** (약 256배 빠름) |
+
+매 검색의 "DB 전체 읽기 + JSON 파싱"을 제거한 결과다. 실제 `/api/ask`도 이 인덱스를 사용하므로 20k 청크에서도 빠르게 답한다. `/api/bench/search?mode=dbscan|memory`로 두 방식을 직접 비교할 수 있다.
+
+**트레이드오프**(정직하게 기록): 인메모리 인덱스는 (a) 임베딩 크기만큼 메모리를 쓰고 (b) 데이터가 바뀌면 갱신이 필요하다(문서 추가 시 증분 반영, 삭제 시 재빌드). 데이터가 아주 커지면 Redis 벡터 검색이나 전용 벡터 DB(ANN 인덱스)로 빼는 것이 다음 수순이다.
 
 ### ④ 캐싱 + 관측성
 동일 질의를 **Redis 분산 캐시**([`QueryCache`](src/main/java/com/yeonwoo/ragdoc/cache/QueryCache.java))로 단락시켜 임베딩·검색·LLM 호출을 통째로 건너뛴다. 캐시 히트/미스는 Micrometer로 `cache_gets_total{cache="query_cache"}` 지표를 내보내 Prometheus/Grafana로 관측한다.

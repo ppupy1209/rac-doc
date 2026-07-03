@@ -5,6 +5,7 @@ import com.yeonwoo.ragdoc.common.CreateDocumentResponse;
 import com.yeonwoo.ragdoc.common.DocumentSummary;
 import com.yeonwoo.ragdoc.embedding.EmbeddingClient;
 import com.yeonwoo.ragdoc.embedding.EmbeddingCodec;
+import com.yeonwoo.ragdoc.search.InMemoryVectorIndex;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,19 +20,22 @@ public class DocumentService {
     private final Chunker chunker;
     private final EmbeddingClient embeddingClient;
     private final EmbeddingCodec embeddingCodec;
+    private final InMemoryVectorIndex vectorIndex;
 
     public DocumentService(
             DocumentRepository documentRepository,
             ChunkRepository chunkRepository,
             Chunker chunker,
             EmbeddingClient embeddingClient,
-            EmbeddingCodec embeddingCodec
+            EmbeddingCodec embeddingCodec,
+            InMemoryVectorIndex vectorIndex
     ) {
         this.documentRepository = documentRepository;
         this.chunkRepository = chunkRepository;
         this.chunker = chunker;
         this.embeddingClient = embeddingClient;
         this.embeddingCodec = embeddingCodec;
+        this.vectorIndex = vectorIndex;
     }
 
     @Transactional
@@ -42,13 +46,14 @@ public class DocumentService {
         for (int i = 0; i < chunks.size(); i++) {
             String content = chunks.get(i);
             float[] embedding = embeddingClient.embed(content);
-            chunkRepository.save(new Chunk(
+            Chunk saved = chunkRepository.save(new Chunk(
                     document.getId(),
                     i + 1,
                     content,
                     embeddingCodec.serialize(embedding),
                     approximateTokenCount(content)
             ));
+            vectorIndex.add(saved); // 최적화 인덱스에 즉시 반영
         }
 
         return new CreateDocumentResponse(document.getId(), document.getTitle(), chunks.size());
@@ -70,6 +75,7 @@ public class DocumentService {
     @Transactional
     public void delete(Long id) {
         documentRepository.deleteById(id);
+        vectorIndex.rebuild();
     }
 
     private int approximateTokenCount(String text) {

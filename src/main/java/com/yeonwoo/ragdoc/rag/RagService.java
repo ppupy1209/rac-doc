@@ -4,7 +4,7 @@ import com.yeonwoo.ragdoc.common.ChunkMatch;
 import com.yeonwoo.ragdoc.common.RagResult;
 import com.yeonwoo.ragdoc.common.Source;
 import com.yeonwoo.ragdoc.embedding.EmbeddingClient;
-import com.yeonwoo.ragdoc.search.SearchService;
+import com.yeonwoo.ragdoc.search.InMemoryVectorIndex;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.stereotype.Component;
 
@@ -15,12 +15,12 @@ import java.util.stream.Collectors;
 public class RagService {
 
     private final EmbeddingClient embeddingClient;
-    private final SearchService searchService;
+    private final InMemoryVectorIndex vectorIndex;
     private final ChatModel chatModel;
 
-    public RagService(EmbeddingClient embeddingClient, SearchService searchService, ChatModel chatModel) {
+    public RagService(EmbeddingClient embeddingClient, InMemoryVectorIndex vectorIndex, ChatModel chatModel) {
         this.embeddingClient = embeddingClient;
-        this.searchService = searchService;
+        this.vectorIndex = vectorIndex;
         this.chatModel = chatModel;
     }
 
@@ -28,7 +28,7 @@ public class RagService {
 
         float[] questionVector = embeddingClient.embed(question);
 
-        List<ChunkMatch> matches = searchService.findSimilar(questionVector, topK);
+        List<ChunkMatch> matches = vectorIndex.search(questionVector, topK);
 
         if (matches.isEmpty()) {
             return new RagResult.NoContext();
