@@ -29,7 +29,7 @@
 - ✅ **Phase 0 - 골격**: Claude+Codex가 전체 스캐폴딩. Docker 빌드·기동·Flyway·health 검증 완료.
 - ✅ **Phase 1 - 실행 확인**: `docker compose up` → 문서 업로드/조회 동작 확인. (문서 올리면 Ollama가 임베딩해 MySQL 저장)
 - ✅ **Phase 2 - RAG 구현 (study ②)**: `rag/RagService.answer()` 완성. 질문→임베딩→검색→프롬프트→LLM→답변+근거. `/api/ask`가 근거 기반 답변 반환. 핵심 학습: **프롬프트 한 줄이 답을 좌우(환각 억제)**.
-- ✅ **Phase 3 - Virtual Threads 측정 (study ①)**: 실제 다운스트림 HTTP 호출(`/api/bench/downstream`→go-httpbin `/delay`) + k6로 A/B 측정. 결과 **처리량 978→2,440 req/s(2.5배), p99 602→213ms, 부하중 JVM 스레드 OFF~350/ON~220**(직접 실측·Grafana 관찰). README 기입 완료. 스크립트 `bench/io-load.js`, 토글 `VTHREADS=true docker compose up -d --force-recreate app`.
+- ✅ **Phase 3 - Virtual Threads 측정 (study ①)**: **실무 오케스트레이션 엔드포인트**(`/api/bench/orchestrate`: 인증→DB→보강→감사, 다운스트림 3회+DB)로 고도화. 결과 **처리량 538→1,257 req/s(2.3배), 평균 895→382ms, 부하중 JVM 스레드 OFF~350/ON~220**(직접 실측). 스크립트 `bench/orchestrate-load.js`(단순 비교용 io/downstream도 있음). 토글 `VTHREADS=true docker compose up -d --force-recreate app`.
 - ✅ **Phase 3b - 남은 study 측정 완료 (③④)**
     - ✅ ④ 캐싱/관측: **Redis 분산 캐시**(재시작·다중 인스턴스에도 유지). 같은 질문 2회 → **8,139ms→0ms, LLM 1→0회**. 재시작 후에도 `cached:true` 확인. + **관측성 대시보드** `grafana/provisioning/dashboards/rag-observability.json`(6패널: 처리량·p95/p99·JVM스레드·힙·CPU·캐시) - 부하 걸며 실시간 관측. Grafana `http://localhost:3001` → "RAG 서비스 관측 대시보드".
     - ✅ ③ MySQL 검색 최적화: **인메모리 벡터 인덱스**(`InMemoryVectorIndex`)로 전환. 20k 청크 검색 **6,458ms→25ms(약 256배)**. RagService·/api/ask도 인덱스 사용. bench `/api/bench/search?mode=dbscan|memory`.
