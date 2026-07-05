@@ -1,12 +1,12 @@
-# rag-doc-service - 설계 문서 (SSOT)
+# ask-wiki - 설계 문서 (SSOT)
 
-> 이 문서는 Codex(스캐폴딩 담당)와 연우님(핵심 학습 모듈 담당)이 **공통으로 따르는 기준**입니다.
+> 이 문서는 AI(스캐폴딩·보조 담당)와 연우님(핵심 학습 모듈 담당)이 **공통으로 따르는 기준**입니다.
 > 계약(패키지/엔드포인트/테이블/DTO)을 벗어난 임의 구조 변경 금지. 변경이 필요하면 이 문서를 먼저 고칩니다.
 
 ## 1. 무엇을 만드는가
 
-**사내 문서 검색·질의(RAG) API.** 문서를 업로드하면 청킹→임베딩→MySQL 저장하고,
-질문을 던지면 유사 청크를 검색해 근거와 함께 LLM 답변을 돌려준다.
+**사내 문서를 근거로 답하는 위키 챗봇(Ask Wiki).** 문서를 업로드하면 청킹→임베딩→MySQL 저장하고,
+질문을 던지면 유사 청크를 검색해 근거와 함께 LLM 답변을 돌려준다. `/`의 웹 UI에서 업로드와 질문을 바로 쓸 수 있다.
 
 하나의 Spring Boot 서비스 안에서 4개의 기술 결정을 각각 study 항목으로 검증한다:
 
@@ -25,13 +25,14 @@
   (community MySQL은 벡터 거리 함수가 없으므로 in-app cosine. study ③의 "최적화"는 후보 축소·정규화·인메모리 인덱스로 다룬다.)
 - Ollama - 임베딩 `nomic-embed-text`, 챗 `llama3.2:3b` (로컬·무료, compose가 자동 pull)
 - 캐시: **Redis**(질의 응답 분산 캐시, study ④), Caffeine(임베딩 인스턴스 로컬 메모이제이션)
+- 파일 파싱: **Apache PDFBox 3.x** (pdf 업로드 텍스트 추출)
 - 관측성: Micrometer → Prometheus → Grafana
 - 부하: k6
 
-## 3. 패키지 구조 (`com.yeonwoo.ragdoc`)
+## 3. 패키지 구조 (`com.yeonwoo.askwiki`)
 
 ```
-com.yeonwoo.ragdoc
+com.yeonwoo.askwiki
 ├─ document/     문서 업로드·CRUD, 청킹, Document/Chunk 저장       [Codex]
 ├─ embedding/    Ollama 임베딩 클라이언트 래퍼, 청크 임베딩         [Codex]
 ├─ search/       청크 벡터 유사도 검색 (study ③)                    [Codex 골격]
@@ -47,6 +48,7 @@ com.yeonwoo.ragdoc
 | 메서드 | 경로 | 요청 | 응답 |
 |---|---|---|---|
 | POST | `/api/documents` | `{ "title": string, "content": string }` | `{ "id", "title", "chunkCount" }` |
+| POST | `/api/documents/upload` | multipart: `file`(md·txt·pdf, 최대 20MB), `title`? | `{ "id", "title", "chunkCount" }` — pdf는 PDFBox로 텍스트 추출 |
 | GET | `/api/documents` | - | `[{ "id", "title", "chunkCount", "createdAt" }]` |
 | DELETE | `/api/documents/{id}` | - | 204 |
 | POST | `/api/ask` | `{ "question": string, "topK"?: int=4 }` | `{ "answer", "sources": [{ "documentId","title","chunkSeq","score" }], "latencyMs", "cached" }` |
