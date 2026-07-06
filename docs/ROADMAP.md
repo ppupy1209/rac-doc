@@ -47,6 +47,19 @@
 - [ ] 삭제 경로: 세대 스왑 구현, 재빌드 중 검색 가용성 확인
 - [ ] 장애 시나리오 검증: relay 죽였다 살리기 → 유실 0건 확인
 
+### Step 1 세부 진행 — 유령 인덱스 재현 테스트 (세션 이어가기용 step-by-step 기록)
+
+> 테스트 DB는 **Testcontainers**(전용 MySQL 8.4 컨테이너 — 빈 DB라 절대값 단언, 호스트 포트 충돌 무관, CI 편입 가능).
+> **재현 시나리오**: 3청크 문서를 `DocumentService.create()`로 넣되, 목(mock) `EmbeddingClient`가 **3번째 청크에서 예외**
+> → `@Transactional` 롤백으로 DB는 document/chunk 0건, 그러나 `vectorIndex.add()`는 트랜잭션 참여자가 아니라 앞 청크 2건이 인덱스에 잔류(유령).
+> 테스트는 "롤백 후 `vectorIndex.size() == 0`"이라는 **원하는 불변식**을 단언 → 현 구조에서는 **빨간 불이 정상**이고, Step 3 수정 후 초록 전환이 B1의 증명이 된다.
+
+- [x] 1-0 툴체인: 윈도우 PC IntelliJ + JDK 21 (Gradle sync 성공 확인 — 테스트 실행은 1-2가 최종 검증을 겸함)
+- [x] 1-1 의존성: `spring-boot-testcontainers` + `testcontainers:junit-jupiter` + `testcontainers:mysql` 추가 (버전은 Boot BOM 관리)
+- [ ] 1-2 골격: `src/test/java/com/yeonwoo/askwiki/document/GhostIndexTest.java` — `@SpringBootTest` + `@Testcontainers` + static `@Container @ServiceConnection MySQLContainer("mysql:8.4")` + `@MockBean EmbeddingClient` + 스모크 테스트(부팅 후 `vectorIndex.size() == 0`) 초록 확인
+- [ ] 1-3 재현 본문: given 3청크짜리 텍스트(청커 규칙: 공백 경계 500자·오버랩 50자 → 약 1,300자 필요), 목 임베딩이 청크1·2는 정상 벡터/청크3은 예외 → when `create()`가 예외로 종료 → then document·chunk 테이블 0건(롤백 확인) + `vectorIndex.size() == 0`(불변식 단언 → 빨간 불 기대)
+- [ ] 1-4 실행·기록: 빨간 불로 유령 엔트리 **N건 실측** → START-HERE 로그·design-notes.md에 기록 → 커밋
+
 ### 측정할 숫자 (before → after)
 
 - 롤백 시나리오에서 유령 인덱스 엔트리: **N건 → 0건**
