@@ -26,6 +26,10 @@ dependencyManagement {
     }
 }
 
+// Boot 3.3 BOM의 Testcontainers 1.19.8이 쓰는 docker-java는 API 1.32로 호출해
+// Docker Engine 29(최소 API 1.40)가 400을 반환 → 최신으로 오버라이드
+ext['testcontainers.version'] = '1.21.3'
+
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
@@ -44,4 +48,10 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-testcontainers'
     testImplementation 'org.testcontainers:junit-jupiter'
     testImplementation 'org.testcontainers:mysql'
+}
+
+test {
+    useJUnitPlatform()   // JUnit 5 테스트 검색 (없으면 gradle test가 테스트를 못 찾음)
+    // docker-java 기본 API 버전(1.32)을 Docker Engine 29(최소 1.40)가 400으로 거부 → 명시 고정
+    systemProperty 'api.version', '1.44'
 }
