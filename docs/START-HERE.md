@@ -36,10 +36,10 @@
 - ✅ **Phase A - 제품 전환 1차 (2026-07-05)**: `rac-doc` → **`ask-wiki`** 리네임(GitHub 레포·로컬 디렉터리·Java 패키지 `com.yeonwoo.askwiki`·앱/지표/대시보드 명). **파일 업로드**(`POST /api/documents/upload`, md·txt·pdf — PDFBox) + **웹 챗 UI**(`/`, 문서 등록·질문·출처 표시) 추가. ✅ **러닝 테스트 통과** (맥, 전체 스택): md 업로드→임베딩·저장, 미지원 확장자 400, 질문→정답+출처(1순위 정확, score 0.83, 6.3s), 동일 질문 캐시 히트(2ms), 문서 밖 질문 "모르겠습니다"(환각 억제). pdf 업로드는 실파일 미검증. ⚠️ 디렉터리 리네임으로 볼륨이 새로 생성됨(모델 재-pull 완료). 포트 충돌 시 `.env` 사용(로컬은 MYSQL_PORT=13306, GRAFANA_PORT=3001 사용 중).
 - ✅ **Phase A-2 - UI 제품화 (2026-07-05)**: 웹 UI를 제품 수준으로 리디자인 — 디자인 토큰·Pretendard 폰트, 헤더(로고·서버 상태 표시), 드래그앤드롭 업로드 존, 문서 목록(호버 삭제), 채팅 버블·타이핑 인디케이터·출처 칩·응답시간/캐시 메타, 토스트 알림, 반응형. 크롬 실화면에서 질문→답변+출처 렌더링 확인 완료.
 - 🔄 **Phase B1 - 증분 인덱싱·정합성 (진행 중, 2026-07-05 시작)**: step-by-step 진행.
-    - 🔄 Step 1: 유령 인덱스 재현 테스트(`GhostIndexTest`) — 연우님 직접 작성 중. 기대: 지금 구조에서는 **빨간 불**(롤백 후에도 인덱스에 청크가 남음).
+    - ✅ Step 1: 유령 인덱스 재현 테스트(`GhostIndexTest`) — **빨간 불 재현 성공(2026-07-06): 롤백 후 유령 엔트리 2건 실측, DB는 0건.** 작성은 Codex CLI 위임, 실행·테스트 인프라 트러블슈팅(Docker Engine 29의 구식 API 400 거부 진단)은 Claude. 상세·재현 방법: ROADMAP "Step 1 세부 진행" + design-notes.md §3.
         - 2026-07-06 윈도우 PC에서 세션 재개. 작업 트리에 테스트 파일 없음 → Step 1을 여기서 진행. 환경 정리: 로컬 브랜치 `master`→`main` 정렬(업스트림 origin/main), 커밋 신원 레포 로컬 설정(§6), 네이티브 mysqld·redis와 포트 충돌 → `.env`(MYSQL_PORT=13306, REDIS_HOST_PORT=16379) 생성, 깨진 `core.sshCommand` 제거, 실수로 중첩 클론된 `ask-wiki/` 폴더 삭제. ⚠️ 이 PC의 SSH 키 2개 모두 GitHub 미등록 상태라 **푸시 보류 중**(`~/.ssh/id_ed25519_github_personal.pub`를 GitHub Settings → SSH keys에 등록하면 해결).
         - 2026-07-06 결정: 재현 테스트 DB는 **Testcontainers**(테스트가 전용 MySQL 8.4 컨테이너를 직접 기동 — 빈 DB라 절대값 단언 가능, 호스트 포트 충돌 무관, 추후 CI 편입 가능). compose MySQL 재사용안은 dev 데이터 오염(델타 단언 강제)·포트 오버라이드 의존·compose 기동 전제 때문에 기각.
-        - **지금 여기 (2026-07-06)**: 마이크로 스텝 1-1까지 완료(Testcontainers 의존성 추가·Gradle sync 성공). 1-2 골격·1-3 재현 본문의 **작성·실행은 연우님 결정으로 Codex CLI에 위임**(스펙: ROADMAP "Step 1 세부 진행") — 결과 검수 후 여기 기록. 스텝 체크리스트와 재현 시나리오 스펙은 `docs/ROADMAP.md` B1의 **"Step 1 세부 진행"** 참조 — 새 세션은 거기서 이어가면 된다.
+        - **지금 여기 (2026-07-06)**: Step 1 완료(빨간 불·유령 2건 실측). 다음은 **Step 2 — 설계 선택지 A~E 비교·결정** (ROADMAP의 표 기준, 연우님 주도 논의) → 결정과 근거를 design-notes.md에 기록 후 Step 3 구현으로.
     - ⬜ Step 2: 설계 선택지 A~E 비교·결정 (design-notes.md에 기록)
     - ⬜ Step 3~: 선택한 구조 구현 → 세대 스왑 → 장애 검증·측정
 - ⬜ **Phase B2 - 답변 품질 평가 하네스**: 계획은 **`docs/ROADMAP.md`** 참고. **진행은 §7 작업 방식(step-by-step) 필수.**

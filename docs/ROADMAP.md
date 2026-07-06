@@ -56,9 +56,14 @@
 
 - [x] 1-0 툴체인: 윈도우 PC IntelliJ + JDK 21 (Gradle sync 성공 확인 — 테스트 실행은 1-2가 최종 검증을 겸함)
 - [x] 1-1 의존성: `spring-boot-testcontainers` + `testcontainers:junit-jupiter` + `testcontainers:mysql` 추가 (버전은 Boot BOM 관리)
-- [ ] 1-2 골격: `src/test/java/com/yeonwoo/askwiki/document/GhostIndexTest.java` — `@SpringBootTest` + `@Testcontainers` + static `@Container @ServiceConnection MySQLContainer("mysql:8.4")` + `@MockBean EmbeddingClient` + 스모크 테스트(부팅 후 `vectorIndex.size() == 0`) 초록 확인
-- [ ] 1-3 재현 본문: given 3청크짜리 텍스트(청커 규칙: 공백 경계 500자·오버랩 50자 → 약 1,300자 필요), 목 임베딩이 청크1·2는 정상 벡터/청크3은 예외 → when `create()`가 예외로 종료 → then document·chunk 테이블 0건(롤백 확인) + `vectorIndex.size() == 0`(불변식 단언 → 빨간 불 기대)
-- [ ] 1-4 실행·기록: 빨간 불로 유령 엔트리 **N건 실측** → START-HERE 로그·design-notes.md에 기록 → 커밋
+- [x] 1-2 골격: `src/test/java/com/yeonwoo/askwiki/document/GhostIndexTest.java` — `@SpringBootTest` + `@Testcontainers` + static `@Container @ServiceConnection MySQLContainer("mysql:8.4")` + `@MockBean EmbeddingClient` + 스모크 테스트(부팅 후 `vectorIndex.size() == 0`) 초록 확인 — 1-2·1-3은 연우님 결정으로 **Codex CLI가 작성**, Claude가 검토·실행
+- [x] 1-3 재현 본문: given 3청크짜리 텍스트(청커 규칙: 공백 경계 500자·오버랩 50자 → 약 1,300자 필요), 목 임베딩이 청크1·2는 정상 벡터/청크3은 예외 → when `create()`가 예외로 종료 → then document·chunk 테이블 0건(롤백 확인) + `vectorIndex.size() == 0`(불변식 단언 → 빨간 불 기대)
+- [x] 1-4 실행·기록 (2026-07-06): **빨간 불 재현 성공 — 유령 엔트리 2건 실측** (`expected: <0> but was: <2>`), document·chunk는 롤백으로 0건, 스모크는 초록. 재현 테스트 자체는 0.36s. ⚠️ `gradlew test`는 Step 3 수정 전까지 의도적으로 red (bootJar·도커 이미지 빌드는 테스트를 안 돌려 영향 없음).
+
+> **테스트 인프라 트러블슈팅 (윈도우 PC, 2026-07-06)** — 재발 시 참고:
+> ① `gradle test`가 "No tests found": build.gradle에 `useJUnitPlatform()`이 없었음(그동안 IntelliJ 자체 러너가 가려줌) → `test` 블록 추가.
+> ② Testcontainers "Could not find a valid Docker environment" + Status 400(빈 Info 응답): docker-java가 구식 `/v1.32` API로 호출하는데 Docker Engine 29(최소 API 1.40)가 400으로 거부. 네임드 파이프에 원시 HTTP를 보내 진단(`/v1.32/info`→400, `/v1.44/info`→200). 해결: Testcontainers 1.21.3 오버라이드 + 테스트 JVM에 `api.version=1.44` 시스템 프로퍼티(build.gradle에 커밋 — 다른 PC에도 적용) + 이 PC의 `~/.testcontainers.properties`에 `docker.host=npipe:////./pipe/dockerDesktopLinuxEngine`(desktop-linux 컨텍스트와 일치, 머신 로컬 설정).
+> ③ IntelliJ에서 이 테스트를 돌릴 땐 Run tests using: **Gradle**(기본값)이어야 ②의 시스템 프로퍼티가 적용됨.
 
 ### 측정할 숫자 (before → after)
 

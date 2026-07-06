@@ -37,3 +37,26 @@ study ③에서 다룸. 측정: 20,002 청크에서 검색 6,458ms(DB 전수 스
 
 ### 글로 쓸 때 구성
 "왜 인메모리로 했나? 멀티 인스턴스는?"을 질문으로 던지고, (1) 원리 증명은 인메모리로, (2) 스케일 시엔 pgvector·전용 벡터 DB로, (3) 단 캐시용 KV Redis와 벡터 인덱스는 다르다는 점, 이 셋을 답하는 흐름.
+
+## 3. B1 딥다이브 — DB 커밋과 벡터 인덱스의 정합성 (진행 중)
+
+### 문제 정의
+`DocumentService.create()`는 청크를 저장하면서 `vectorIndex.add()`로 인메모리 인덱스에 즉시 반영한다.
+그런데 인덱스는 트랜잭션 참여자가 아니다 — 커밋 전에 반영되는 "트랜잭션 경계 밖 부수효과"라서,
+롤백이 일어나면 DB에는 없는 청크가 인덱스에 남는다(유령 엔트리). 유령이 검색되면 본문 조회가 실패해
+빈 content가 RAG 컨텍스트로 흘러든다. 인기글 스터디에서 다룬 "DB 커밋과 Kafka 발행의 원자성"과 동일한 문제 구조.
+
+### 재현 실측 (2026-07-06, `GhostIndexTest`)
+- 방법: Testcontainers(MySQL 8.4) 위 `@SpringBootTest`. 목 `EmbeddingClient`가 3청크 문서의 1·2번째는 정상 벡터,
+  3번째에서 예외 → `create()`의 `@Transactional` 전체 롤백.
+- 결과: document·chunk 테이블 **0건**(롤백 정상 동작), 벡터 인덱스에는 **유령 엔트리 2건 잔류** (`expected: <0> but was: <2>`).
+- 테스트는 "롤백 후 인덱스 0건"이라는 원하는 불변식을 단언 → 현 구조에서 **의도된 red**. 수정(Step 3) 후 green 전환이 곧 증명.
+- 측정 환경: 윈도우 11, Docker Desktop(Engine 29.6.1), Temurin 21, Spring Boot 3.3.5, Testcontainers 1.21.3.
+  재현: `./gradlew test --tests "*GhostIndexTest"` (Docker 필요).
+
+### 부수 수확 — "CLI는 되는데 SDK만 안 될 때" 진단기 (글감)
+Testcontainers가 "Could not find a valid Docker environment"(Status 400, 빈 Info)로 실패했는데 docker CLI는 정상.
+네임드 파이프에 원시 HTTP를 직접 보내 계층을 벗겨보니 `/v1.32/info`→400, `/v1.44/info`→200 —
+docker-java의 구식 기본 API 버전(1.32)을 Docker Engine 29(최소 1.40)가 거부하는 것이 원인이었다.
+중간 계층(테스트 프레임워크→SDK→전송)을 하나씩 배제하고 프로토콜 레벨까지 내려가 진단한 사례.
+해결: 테스트 JVM에 `api.version=1.44` 고정(레포에 커밋) — 상세는 ROADMAP B1 트러블슈팅 노트.
