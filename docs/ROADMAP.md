@@ -111,7 +111,11 @@
     > ③ **스케줄링은 프로퍼티로 게이트**(`askwiki.outbox.scheduler-enabled`, 기본 on) → 테스트에선 off로 두고 `relay.processPendingEvents()`를 **수동 호출**해 결정적으로 검증(@Scheduled 백그라운드 실행이 단언을 흔들지 않게).
     > ④ 폴링 주기 프로퍼티(`askwiki.outbox.poll-interval-ms`, 기본 1000) → 3-7 "반영 지연 vs 폴링 주기" 측정 노브.
     > ⑤ 청크가 이미 삭제됐으면(findById 없음) add 없이 PROCESSED로 마킹(무한 재처리 방지).
-- [ ] 3-5: 테스트 — ① 해피패스(커밋 후 relay가 결국 반영 = eventual consistency) ② 멱등(같은 이벤트 2회 처리해도 중복 없음) ③ relay-kill(반영 전 크래시→재기동 시 유실 0)
+- [x] 3-5: relay-kill 장애 주입 ✅ Codex 작성, Claude 검증(2026-07-07): `IndexOutboxRelayFailureTest` 2개 통과 — `recoversWithoutLossWhenRelayCrashesMidBatch`(크래시 후 3 PENDING 보존=유실 0, 재시도 시 index 3·중복 0·3 PROCESSED), `marksProcessedWhenChunkMissing`(obsolete 이벤트도 PROCESSED, 무한 재처리 방지). **전체 스위트 10개 그린.** (①②는 3-4에서 완료.)
+    > **설계 (2026-07-07)**: 실제 JVM kill 대신 "마킹 전 크래시"를 결정적으로 시뮬레이션 — `@SpyBean InMemoryVectorIndex`에 카운터 기반 answer로 **2번째 `add()`에서 예외**를 던진다. `processPendingEvents()`는 `@Transactional`이라 예외 시 전체 롤백 → 이미 처리한 이벤트의 `markProcessed()`(dirty)도 커밋 안 됨.
+    > - 테스트 A `recoversWithoutLossWhenRelayCrashesMidBatch`: create()로 3 PENDING → 크래시(2nd add throw)로 `processPendingEvents()` 예외 → **유실 0 검증**: 여전히 3 PENDING·0 PROCESSED(마킹 롤백) → 재시도(스텁이 이후엔 real) → index 3(크래시 전 부분 add가 **dedup**돼 4 아님)·0 PENDING·3 PROCESSED. = at-least-once + 멱등이 유실도 중복도 막음.
+    > - 테스트 B `marksProcessedWhenChunkMissing`: 청크 삭제 후 PENDING 이벤트만 남은 상태(obsolete) → `processPendingEvents()`가 예외 없이 add 건너뛰고 PROCESSED 마킹(무한 재처리 방지, `ifPresent` 경로 검증).
+    > - 신규 클래스 `IndexOutboxRelayFailureTest`(@SpyBean 격리 위해 별도).
 - [ ] 3-6: 삭제 경로 — 세대 인덱스 스왑(AtomicReference), 재빌드 중 검색 가용성 확인
 - [ ] 3-7: 측정 — 유령 N→0 확정, 업로드→검색 반영 지연 평균/최대 ms(폴링 주기 관계)
 
