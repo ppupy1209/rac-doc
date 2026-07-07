@@ -1,10 +1,11 @@
-package com.yeonwoo.askwiki.document;
+package com.yeonwoo.askwiki.search;
 
 import com.yeonwoo.askwiki.common.CreateDocumentRequest;
+import com.yeonwoo.askwiki.document.ChunkRepository;
+import com.yeonwoo.askwiki.document.Chunker;
+import com.yeonwoo.askwiki.document.DocumentRepository;
+import com.yeonwoo.askwiki.document.DocumentService;
 import com.yeonwoo.askwiki.embedding.EmbeddingClient;
-import com.yeonwoo.askwiki.search.IndexOutboxEvent;
-import com.yeonwoo.askwiki.search.IndexOutboxRepository;
-import com.yeonwoo.askwiki.search.InMemoryVectorIndex;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,13 +21,12 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
 @SpringBootTest(properties = "askwiki.outbox.scheduler-enabled=false")
 @Testcontainers
-class GhostIndexTest {
+class IndexOutboxRelayTest {
 
     @Container
     @ServiceConnection
@@ -45,10 +45,13 @@ class GhostIndexTest {
     IndexOutboxRepository outboxRepository;
 
     @Autowired
-    Chunker chunker;
+    InMemoryVectorIndex vectorIndex;
 
     @Autowired
-    InMemoryVectorIndex vectorIndex;
+    IndexOutboxRelay relay;
+
+    @Autowired
+    Chunker chunker;
 
     @MockBean
     EmbeddingClient embeddingClient;
@@ -62,40 +65,57 @@ class GhostIndexTest {
     }
 
     @Test
-    void startsWithEmptyVectorIndexAfterRebuild() {
+    void reflectsCommittedChunksAfterRelayRuns() {
+        createThreeChunkDocument();
+
         assertEquals(0, vectorIndex.size());
+
+        int processed = relay.processPendingEvents();
+
+        assertEquals(3, processed);
+        assertEquals(3, vectorIndex.size());
+        assertEquals(0, outboxRepository.findByStatusOrderByIdAsc(
+                IndexOutboxEvent.Status.PENDING
+        ).size());
+        assertEquals(3, outboxRepository.findByStatusOrderByIdAsc(
+                IndexOutboxEvent.Status.PROCESSED
+        ).size());
     }
 
     @Test
-    void leavesNoVectorIndexEntriesAfterRolledBackCreate() {
-        String content = threeChunkContent();
-        assertEquals(3, chunker.split(content).size());
+    void isIdempotentOnRepeatedPolls() {
+        createThreeChunkDocument();
+        assertEquals(3, relay.processPendingEvents());
 
-        when(embeddingClient.embed(anyString()))
-                .thenReturn(new float[]{1.0f, 0.0f})
-                .thenReturn(new float[]{0.0f, 1.0f})
-                .thenThrow(new RuntimeException("third chunk embedding failed"));
+        int processed = relay.processPendingEvents();
 
-        assertThrows(RuntimeException.class, () -> documentService.create(
-                new CreateDocumentRequest("rollback reproduction", content)
-        ));
-
-        assertEquals(0, documentRepository.count());
-        assertEquals(0, chunkRepository.count());
-
-        long leftoverOutboxCount = outboxRepository.count();
-        assertEquals(0, leftoverOutboxCount,
-                "Expected outboxRepository.count() to be 0 after rolled-back create, but found "
-                        + leftoverOutboxCount + " leftover events");
-
-        int ghostEntryCount = vectorIndex.size();
-        assertEquals(0, ghostEntryCount,
-                "Expected vectorIndex.size() to be 0 after rolled-back create, but found "
-                        + ghostEntryCount + " ghost entries");
+        assertEquals(0, processed);
+        assertEquals(3, vectorIndex.size());
+        assertEquals(3, outboxRepository.findByStatusOrderByIdAsc(
+                IndexOutboxEvent.Status.PROCESSED
+        ).size());
     }
 
     @Test
-    void recordsPendingOutboxEventsWhenCreateCommits() {
+    void doesNotDuplicateWhenChunkAlreadyIndexed() {
+        createThreeChunkDocument();
+
+        vectorIndex.rebuild();
+        assertEquals(3, vectorIndex.size());
+
+        int processed = relay.processPendingEvents();
+
+        assertEquals(3, processed);
+        assertEquals(3, vectorIndex.size());
+        assertEquals(0, outboxRepository.findByStatusOrderByIdAsc(
+                IndexOutboxEvent.Status.PENDING
+        ).size());
+        assertEquals(3, outboxRepository.findByStatusOrderByIdAsc(
+                IndexOutboxEvent.Status.PROCESSED
+        ).size());
+    }
+
+    private void createThreeChunkDocument() {
         String content = threeChunkContent();
         assertEquals(3, chunker.split(content).size());
 
@@ -105,16 +125,6 @@ class GhostIndexTest {
                 .thenReturn(new float[]{1.0f, 1.0f});
 
         documentService.create(new CreateDocumentRequest("committed create", content));
-
-        assertEquals(1, documentRepository.count());
-        assertEquals(3, chunkRepository.count());
-        assertEquals(3, outboxRepository.count());
-        assertEquals(3, outboxRepository.findByStatusOrderByIdAsc(
-                IndexOutboxEvent.Status.PENDING
-        ).size());
-
-        // Reflection into the vector index happens in the relay, step 3-4.
-        assertEquals(0, vectorIndex.size());
     }
 
     private String threeChunkContent() {

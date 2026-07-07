@@ -5,6 +5,8 @@ import com.yeonwoo.askwiki.common.CreateDocumentResponse;
 import com.yeonwoo.askwiki.common.DocumentSummary;
 import com.yeonwoo.askwiki.embedding.EmbeddingClient;
 import com.yeonwoo.askwiki.embedding.EmbeddingCodec;
+import com.yeonwoo.askwiki.search.IndexOutboxEvent;
+import com.yeonwoo.askwiki.search.IndexOutboxRepository;
 import com.yeonwoo.askwiki.search.InMemoryVectorIndex;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -21,6 +23,7 @@ public class DocumentService {
     private final EmbeddingClient embeddingClient;
     private final EmbeddingCodec embeddingCodec;
     private final InMemoryVectorIndex vectorIndex;
+    private final IndexOutboxRepository outboxRepository;
 
     public DocumentService(
             DocumentRepository documentRepository,
@@ -28,7 +31,8 @@ public class DocumentService {
             Chunker chunker,
             EmbeddingClient embeddingClient,
             EmbeddingCodec embeddingCodec,
-            InMemoryVectorIndex vectorIndex
+            InMemoryVectorIndex vectorIndex,
+            IndexOutboxRepository outboxRepository
     ) {
         this.documentRepository = documentRepository;
         this.chunkRepository = chunkRepository;
@@ -36,6 +40,7 @@ public class DocumentService {
         this.embeddingClient = embeddingClient;
         this.embeddingCodec = embeddingCodec;
         this.vectorIndex = vectorIndex;
+        this.outboxRepository = outboxRepository;
     }
 
     @Transactional
@@ -53,7 +58,11 @@ public class DocumentService {
                     embeddingCodec.serialize(embedding),
                     approximateTokenCount(content)
             ));
-            vectorIndex.add(saved); // 최적화 인덱스에 즉시 반영
+            outboxRepository.save(new IndexOutboxEvent(
+                    IndexOutboxEvent.EventType.CHUNK_ADDED,
+                    saved.getId(),
+                    document.getId()
+            ));
         }
 
         return new CreateDocumentResponse(document.getId(), document.getTitle(), chunks.size());

@@ -61,6 +61,10 @@ public class InMemoryVectorIndex {
 
     /** 문서 생성 시 새 청크를 증분 추가(전체 재빌드 없이). */
     public void add(Chunk chunk) {
+        // 재처리/재시작-rebuild 중복 방지.
+        if (entries.stream().anyMatch(entry -> entry.chunkId().equals(chunk.getId()))) {
+            return;
+        }
         List<Entry> next = new ArrayList<>(entries);
         next.add(toEntry(chunk));
         this.entries = next;

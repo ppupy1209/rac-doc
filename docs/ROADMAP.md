@@ -101,10 +101,16 @@
 > 롤백되면 이벤트도 함께 롤백 → 유령 원천 차단. 별도 relay(폴링 스케줄러)가 PENDING 이벤트를 읽어 인덱스에 반영하고 PROCESSED로 마킹. 재처리에 안전하도록 멱등.
 > **create/add 경로(유령 문제)를 먼저**, 삭제(세대 스왑)는 3 후반.
 
-- [ ] 3-1: V2 Flyway 마이그레이션 — `index_outbox` 테이블 (status 인덱스 포함)
-- [ ] 3-2: `IndexOutboxEvent` 엔티티 + `IndexOutboxRepository` (PENDING 조회 파생 쿼리)
-- [ ] 3-3: `create()` 수정 — `vectorIndex.add()` 제거, 같은 트랜잭션에서 outbox INSERT. → `GhostIndexTest` **초록 전환**(롤백 시 이벤트도 롤백돼 인덱스 0) + 신규 "커밋 후엔 이벤트가 PENDING으로 남는다" 단언
-- [ ] 3-4: relay — `@Scheduled` 폴링, PENDING 읽어 인덱스 반영 후 PROCESSED. 멱등(이미 인덱스에 있으면 skip 또는 재적용 안전)
+- [x] 3-1: V2 Flyway 마이그레이션 — `index_outbox` 테이블 (status 인덱스 포함) ✅ Codex 작성, Claude 검증
+- [x] 3-2: `IndexOutboxEvent` 엔티티(`search` 패키지) + `IndexOutboxRepository`(`findByStatusOrderByIdAsc`) ✅
+- [x] 3-3: `create()` 수정 — `vectorIndex.add()` 제거, 같은 트랜잭션에서 outbox INSERT. **`GhostIndexTest` 초록 전환 확인**(2026-07-07): 롤백 테스트 `outbox.count()==0`·`vectorIndex.size()==0` 통과, 해피패스 `recordsPendingOutboxEventsWhenCreateCommits`(1 doc/3 chunk/3 PENDING/index 0) 통과, 전체 스위트 그린. 유령 2건 → 0건. **삭제·relay는 다음 스텝.**
+- [x] 3-4: relay — `@Scheduled` 폴링, PENDING 읽어 인덱스 반영 후 PROCESSED. 멱등. ✅ Codex 작성, Claude 검증(2026-07-07): `IndexOutboxRelayTest` 3개 통과 — `reflectsCommittedChunksAfterRelayRuns`(반영 후 index 3·PROCESSED 3), `isIdempotentOnRepeatedPolls`(재폴링 no-op·중복 0), `doesNotDuplicateWhenChunkAlreadyIndexed`(rebuild 후 재처리해도 dedup으로 index 3 유지). 전체 스위트 8개 그린. add→mark 순서, add() chunkId 멱등 적용.
+    > **relay 설계 결정 (2026-07-07, 면접 Q3 멱등성 대응)**:
+    > ① **순서 = 인덱스 add 먼저 → 그다음 PROCESSED 마킹** (at-least-once). 반대로 하면 "마킹 후 크래시 → 반영 누락(유실)". add를 먼저 하면 최악의 경우 재처리(중복 시도)뿐이라 멱등으로 흡수 가능.
+    > ② **멱등성 2겹**: (a) 상태 필터로 PENDING만 처리, (b) 재처리·재시작 시 중복 방지를 위해 `InMemoryVectorIndex.add()`를 **chunkId 기준 멱등**으로 변경(이미 있으면 skip). 재시작 시 `rebuild()`가 전량 로드한 뒤 남은 PENDING을 relay가 재처리해도 dedup으로 안전 — 파생 데이터(E) 관점과 Outbox(C)가 만나는 지점.
+    > ③ **스케줄링은 프로퍼티로 게이트**(`askwiki.outbox.scheduler-enabled`, 기본 on) → 테스트에선 off로 두고 `relay.processPendingEvents()`를 **수동 호출**해 결정적으로 검증(@Scheduled 백그라운드 실행이 단언을 흔들지 않게).
+    > ④ 폴링 주기 프로퍼티(`askwiki.outbox.poll-interval-ms`, 기본 1000) → 3-7 "반영 지연 vs 폴링 주기" 측정 노브.
+    > ⑤ 청크가 이미 삭제됐으면(findById 없음) add 없이 PROCESSED로 마킹(무한 재처리 방지).
 - [ ] 3-5: 테스트 — ① 해피패스(커밋 후 relay가 결국 반영 = eventual consistency) ② 멱등(같은 이벤트 2회 처리해도 중복 없음) ③ relay-kill(반영 전 크래시→재기동 시 유실 0)
 - [ ] 3-6: 삭제 경로 — 세대 인덱스 스왑(AtomicReference), 재빌드 중 검색 가용성 확인
 - [ ] 3-7: 측정 — 유령 N→0 확정, 업로드→검색 반영 지연 평균/최대 ms(폴링 주기 관계)
