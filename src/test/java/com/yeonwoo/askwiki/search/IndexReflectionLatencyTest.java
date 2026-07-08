@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.test.annotation.DirtiesContext;
 import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -37,6 +38,9 @@ import static org.mockito.Mockito.when;
         "askwiki.outbox.poll-interval-ms=200"
 })
 @Testcontainers
+// 실제 스케줄러가 켜진 컨텍스트가 캐시로 남아 컨테이너 종료 후에도 폴링→연결 에러 로그를 뿜는 것을 방지.
+// 클래스 종료 시 컨텍스트(=스케줄러)를 닫아 컨테이너보다 오래 살아남지 않게 한다.
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class IndexReflectionLatencyTest {
 
     private static final long POLL_INTERVAL_MS = 200;
