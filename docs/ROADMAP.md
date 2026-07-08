@@ -172,6 +172,17 @@
 - [ ] **실험 매트릭스**: 청크 크기(예: 200/400/800자) × topK(2/4/8)로 hit rate 비교 → 표로 기록
 - [ ] 결과를 바탕으로 기본값 재결정 + 근거 기록
 
+### Step 세부 진행 (2026-07-07 결정: 사내 HR/총무 golden set + JUnit @Tag("eval") 러너)
+
+> **역할**: golden set 데이터(문서·질문)는 재현 테스트 데이터라 **Claude가 초안 작성 → 연우님 검수**. 러너·측정 코드는 Codex 위임→Claude 검증. hit rate는 LLM 없이 결정적(CI 적합), 생성 지표는 LLM 필요(로컬).
+> **핵심 설계**: golden set은 문서를 DB auto-increment id가 아니라 **논리적 slug**로 참조. 러너가 코퍼스를 업로드하며 slug→dbId 매핑을 잡고, hit rate는 "기대 slug의 dbId가 topK 검색결과에 포함됐나"로 판정 → id 흔들림과 무관하게 결정적.
+
+- [x] B2-1: golden set 포맷·스키마 확정 ✅ (2026-07-07) 코퍼스 `src/test/resources/eval/corpus/*.md`(H1=제목, 파일명=slug) + `questions.json`(answerable/unanswerable 배열, expectedDocSlug·expectedAnswer·difficulty). 연우님 포맷 승인.
+- [x] B2-2: golden set 데이터 작성 ✅ (2026-07-07, Claude 초안) — HR/총무 **8문서**(vacation·attendance·salary·expense·welfare·security·onboarding·equipment) + **질문 50개**(answerable 30: easy/medium/hard 섞음, unanswerable 20: 도메인 인접 함정). 선정 기준은 `eval/README.md`. **⚠️ 연우님 사실관계 검수 필요**(정답이 문서와 일치하는지).
+- [ ] B2-3: hit rate@K 러너 (`@Tag("eval")`, Testcontainers, LLM 없이 검색만 — 결정적). 기준선 hit rate@4 측정.
+- [ ] B2-4: 환각률·인용 정확도 러너 (LLM 필요, 로컬 실행 태그 분리).
+- [ ] B2-5: 실험 매트릭스(청크 200/400/800 × topK 2/4/8) → hit rate 표 → 기본값 재결정·근거 기록.
+
 ### 측정할 숫자
 
 - hit rate@4: 기준선 **N%** → 튜닝 후 **M%** (무엇을 바꿔서 올랐는지가 핵심)
