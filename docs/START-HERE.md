@@ -45,7 +45,7 @@
 - ✅ **Phase B2 - 답변 품질 평가 하네스 (완료, 2026-07-07)**: golden set(HR/총무 8문서·질문 50개) + `@Tag("eval")` 러너 **4종**(HitRate·ChunkSizeMatrix·Hallucination·ScoreDistribution, `./gradlew evalTest`, Ollama 필요). **실측**: hit rate@4=93.3%(청크 500·topK 4 유지), 환각률(프롬프트 4종 + 임계값까지 조사) → **로컬 소형 모델(llama3.2:3b+nomic)의 환각 바닥은 프롬프트·임계값으로 못 넘음 → 진짜 레버는 C2(더 강한 모델)**. 배포 프롬프트 = v4(오거부 3.3%, UX 우선). **핵심 발견: (1) Phase A 1회 확인은 거짓 안심(체계 측정하니 환각 65%) (2) 임계값 가설을 구현 전 측정으로 기각(점수 분포 겹침).** 상세: design-notes §3, b2-prompt-experiments.md. ⚠️ golden set 사실관계는 연우님 검수 권장.
     - **지금 여기 (2026-07-07)**: B1·B2 완료. 다음 = **C2 상용 LLM 스위치**(B2가 정량적 동기 제공 — 환각↓ 증명 대상) / **C1 벡터 DB 이행** / **W 워크플로우 아티팩트화**(병행) 중 선택. ROADMAP "채용 공고 대응" 참조.
 - ⬜ **Phase C1~C3 - 채용 공고 대응 딥다이브 (2026-07-07 편성)**: C1 벡터 DB 이행(B1 패턴 이식·B2 검증) → C2 상용 LLM 스위치(토큰·비용 관측, 구 B4·배포 흡수) → C3 에이전틱 RAG. 근거·매핑은 ROADMAP "채용 공고 대응" 참조.
-- 🔁 **W - Claude Code 워크플로우 아티팩트화 (병행, 2026-07-07 시작 결정)**: W-1 CLAUDE.md+금칙어 훅부터. 체크리스트는 ROADMAP.
+- 🔁 **W - Claude Code 워크플로우 아티팩트화 (병행, 2026-07-07)**: ✅ W-1 완료(프로젝트 CLAUDE.md + 커밋 가드 훅 2겹: git pre-commit + Claude Code PreToolUse, secret-scanner 방식). 남음: W-2 커스텀 커맨드 / W-3 서브에이전트 사례 기록 / W-4 워크플로우 글. 체크리스트는 ROADMAP.
 - ⬜ **Phase D - 포트폴리오 통합**: study 글 + 다이어그램을 포트폴리오 사이트(`yeonwoo-dev/web/`)에 반영. 체크리스트는 `docs/ROADMAP.md` 하단.
 
 > 이 로그를 매 Phase 끝날 때 갱신한다(체크박스 ✅). 새 PC/세션은 이 로그의 "지금 여기"부터 이어가면 된다.

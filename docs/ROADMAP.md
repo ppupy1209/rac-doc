@@ -23,7 +23,7 @@
 - **C2 상용 LLM 프로바이더 스위치**: Spring AI 추상화로 Ollama ↔ Claude/GPT/Gemini 전환. 토큰·비용 Micrometer 지표(공고의 "토큰 최적화"), 타임아웃·세마포어·degraded 폴백(구 B4 흡수), B2로 프로바이더별 품질·비용 비교. 부수 효과: 저비용 운영 배포 가능(백로그 배포 과제 해소). B3(SSE first-token)도 여기서 결합 검토.
 - **C3 에이전틱 RAG**: 단발 검색→답변을 넘어 검색 필요 판단·질문 재작성·다중 검색 루프. 프레임워크(Spring AI tool-calling vs LangChain4j)는 착수 시 비교·결정 — LangChain/LangGraph 키워드에는 "동일 개념을 자바 생태계로 구현 + 원리로 설명" 전략으로 대응. 개선은 반드시 B2 하네스로 증명.
 - **W Claude Code 워크플로우 아티팩트화 (병행)**: 이미 실천 중인 것을 레포에 보이게 만든다.
-    - [ ] W-1: `CLAUDE.md` + 커밋 전 금칙어 검사 훅
+    - [x] W-1: `CLAUDE.md` + 커밋 전 금칙어 검사 훅 ✅ (2026-07-07) 프로젝트 `CLAUDE.md`(빌드·테스트·컨벤션·워크플로우) + **secret-scanner 방식** 커밋 가드 2겹: (1) git `.githooks/pre-commit`(레포 동봉·범용, `core.hooksPath .githooks`로 설치) (2) Claude Code `.claude/settings.json` PreToolUse 훅(AI 세션용, `.githooks/claude-commit-guard.sh`, fail-open). 스테이지된 **추가 줄만** `.githooks/denylist.txt`와 대조(기존 정당한 표현 재검사 안 함, denylist 파일 자기 제외). 4개 케이스 테스트 통과. 채용 공고 "Claude Code 훅" 직접 대응.
     - [ ] W-2: 커스텀 커맨드 (세션 시작 브리핑·진행 기록)
     - [ ] W-3: 서브에이전트 활용 사례 기록 (Codex 위임 — GhostIndexTest 작성 사례)
     - [ ] W-4: "AI 페어 워크플로우" 포트폴리오 글감 (step-by-step 프로토콜 = START-HERE §7)
