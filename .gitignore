@@ -3,3 +3,4 @@ build/
 .idea/
 *.log
 .env
+.claude/settings.local.json
