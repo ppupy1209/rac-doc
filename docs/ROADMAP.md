@@ -215,6 +215,57 @@
 
 ---
 
+## Phase C2 — 상용 LLM 프로바이더 스위치 (딥다이브 ④, 계획 2026-07-10)
+
+> **정량적 동기 (B2에서 옴)**: 로컬 소형 모델(llama3.2:3b + nomic-embed-text)의 환각 바닥(65%/60%)은 프롬프트·유사도 임계값으로 못 넘었다(design-notes §3, 원인 (a) 임베딩이 인접-부재 항목 미분리 (b) 3B 모델의 "구체 답이 실제로 있나" 판단 약함). C2의 서사 = **B2 하네스로 "더 강한 상용 모델이 그 바닥을 실제로 깬다"를 증명**한다. "API 붙였다"가 아니라 "측정으로 개선을 증명했다"가 목표.
+
+### 확정 결정 (2026-07-10, 연우님)
+
+- **프로바이더: 세 개(Claude / GPT / Gemini) 모두 스위치 가능하게** 설계 — 공고의 "Claude/GPT/Gemini + 토큰 최적화" 직접 대응. 우선 1개 붙이고 확장. ⚠️ 실제 비교 측정은 **API 키가 있는 프로바이더**로만 가능(키 없는 건 스위치 골격까지).
+- **측정 순서 확정 (2026-07-10)**: ① **Gemini 무료(1순위)** — Google AI Studio API 키(구독과 별개, 카드 불필요). Spring AI `spring-ai-starter-model-google-genai`가 Gemini Developer API(무료 티어) 지원(`spring.ai.google.genai.api-key`만; `project-id`/`location` 넣으면 Vertex 과금 모드로 전환되니 금지). ⚠️ BOM 1.0.9 포함 여부는 C2-1 첫 확인. ② **불만족 시 Claude Sonnet 5로 escalation** — thinking **disabled**(RAG는 사고 불필요, 안 끄면 사고 토큰이 출력 단가로 붙어 비용·지연↑). 비용: full eval 1회(~50Q) ≈ Sonnet 5 인트로 $0.28/정가 $0.41, Haiku 4.5 $0.14 — 프롬프트 튜닝 10회도 몇 달러. **왜 별도 과금**: 구독(Claude Max·ChatGPT·Gemini Advanced)은 챗 제품용이라 개발자 API 키로 못 씀 → Gemini 무료 티어만 $0 실측 경로.
+- **C2-1 발견·결정 (2026-07-10)**: `spring-ai-starter-model-google-genai`는 **Spring AI 1.0.9에 없음**(1.1.0-M1부터, GA 1.1.0). 게다가 1.1.x는 **Spring Boot 3.5.x 기준**인데 레포는 **3.3.5** → BOM 상향은 그린 스위트·Testcontainers 핀에 리스크라 비권장. **채택 = A안(OpenAI 호환 엔드포인트)**: 1.0.9에 있는 `spring-ai-starter-model-openai`를 **Gemini OpenAI-compat 엔드포인트**(`https://generativelanguage.googleapis.com/v1beta/openai/...`)로 base-url 지정 + 무료 Gemini 키. 버전 상향 0·공식 스타터·무료·최소 코드. 트레이드오프: Gemini가 "openai" 스타터 뒤에 있어, 나중에 진짜 GPT 추가 시 설정 분리 필요. (대안 B=커스텀 Gemini 어댑터, C=Boot 3.5 상향은 보류.)
+- **범위: 챗 LLM만 교체(1차)**. 임베딩은 `nomic-embed-text` 유지 → 쿼리당 추가 비용 0, 캐시 구조 불변. **부수 효과 = 실험 통제**: 임베딩을 고정하므로 환각이 내려가면 원인을 LLM 판단(b)으로 귀속할 수 있음(임베딩(a)과 분리 진단). 임베딩 교체는 후속 — 유료화 시 임베딩 캐시 Redis 이전은 design-notes §1이 이미 예고.
+- **B3(SSE) 미포함** — C2는 스위치·관측·장애격리·품질비교에 집중. B3는 후속.
+
+### 현재 코드 상태 (착수 전 실측, 2026-07-10)
+
+- Spring AI 인터페이스가 이미 추상화 지점: `RagService`가 `ChatModel`(인터페이스) 주입, `EmbeddingClient`가 `EmbeddingModel` 래핑. `build.gradle`엔 `spring-ai-starter-model-ollama`만 → 오토컨픽이 `ChatModel` 1개 빈만 생성.
+- ⚠️ `RagService`는 `chatModel.call(String)` — usage(토큰) 메타를 버린다. 토큰 관측하려면 `call(Prompt)` → `ChatResponse.getMetadata().getUsage()`로 전환 필요.
+- 장애 격리 전무: `try/catch` → `RagResult.LlmError`만. 타임아웃·세마포어·폴백은 net-new(구 B4).
+- Micrometer→Prometheus→Grafana는 이미 배선됨. `QueryCache`의 카운터 등록 패턴을 토큰·비용 지표에 그대로 복제 가능.
+
+### 설계 (제안 — 착수 시 확정)
+
+- **프로바이더 선택**: 프로퍼티 `askwiki.llm.provider`(ollama|anthropic|openai|gemini, 기본 ollama)로 활성 `ChatModel` 선택. 여러 스타터를 클래스패스에 두고 `@ConditionalOnProperty`/팩토리로 하나를 primary 주입. **같은 jar를 프로바이더만 바꿔 B2 하네스로 각각 돌릴 수 있게** — 비교 측정이 목적이므로 런타임 스위치가 핵심 이음새.
+- **토큰·비용 관측**: `QueryCache` 카운터 패턴 재사용 → `llm.tokens{provider,type=input|output}`, `llm.calls{provider}`, `llm.latency`(타이머), 프로바이더별 단가로 추정 비용. Grafana 패널 추가.
+- **장애 격리 (구 B4)**: LLM 호출 타임아웃 + 동시성 세마포어(상한) + degraded 폴백(`RagResult` 새 케이스 or `LlmError` 확장). 부하 중 타임아웃/kill 주입 테스트로 폴백 검증.
+- **시크릿**: API 키는 커밋 금지 — `.env` + W-1 denylist(`.githooks/denylist.txt`)에 키 패턴 추가(secret-scanner 연결, W와 교차).
+
+### 과제 (Step 세부 — 착수 시 step-by-step)
+
+- [x] C2-1 ✅ (2026-07-10): `spring-ai-starter-model-openai` 추가 + `askwiki.llm.provider`(ollama|gemini) 스위치. **선택 방식 = `LlmProviderEnvironmentPostProcessor`**(EPP)가 provider→`spring.ai.model.chat` 매핑(ollama→ollama, gemini→openai)을 최우선 프로퍼티로 주입 → 선택된 챗 모델만 오토컨픽(@Primary 불필요 + 미선택 프로바이더 키 요구 없음). 임베딩은 `spring.ai.model.embedding=ollama`로 nomic 고정(함정 A). application.yml에 Gemini OpenAI-compat 설정(base-url=`generativelanguage.googleapis.com` + completions-path=`/v1beta/openai/chat/completions`, model=`gemini-2.5-flash`, api-key=`${GOOGLE_GENAI_API_KEY:}`; project-id/location 없음). **전체 13 테스트 그린**(provider=ollama·키 없이). 코덱스가 Windows에서 겉돌아(모델버전→hang→wedged broker→PowerShell patch thrashing) Claude가 직접 마무리.
+    > **함정 발견·기록**: `spring-ai-starter-model-openai`는 chat·embedding뿐 아니라 **audio(speech/transcription)·image·moderation 모델까지 오토컨픽**하고, 이들이 빈 api-key로 생성되며 `IllegalArgumentException: OpenAI API key must be set`로 **컨텍스트 전체를 무너뜨림**. → `spring.ai.model.{image,audio.speech,audio.transcription,moderation}=none`으로 비활성화해야 함정 B(키 없이 부팅) 성립. chat=ollama만으로는 부족.
+- [x] C2-2 ✅ (2026-07-10): `RagService`가 `chatModel.call(prompt)`(String) → `chatModel.call(new Prompt(prompt))` → `ChatResponse`로 전환. 답변은 `response.getResult().getOutput().getText()`, 토큰 usage는 `response.getMetadata().getUsage()`(prompt/completion/total)로 확보해 현재는 DEBUG 로깅(`logTokenUsage`). RagResult.Answered DTO는 불변(AskController/QueryCache 무영향). 컴파일·회귀 13 그린. **라이브 usage 관찰은 Ollama 필요**(임베딩) → C2-3/C2-5에서 확인. 기능상 call(String)과 동치 + usage 로깅만 추가라 안전.
+- [ ] C2-3: 토큰·비용·지연 Micrometer 지표 + Grafana 패널.
+- [ ] C2-4: 장애 격리 — 타임아웃·세마포어·degraded 폴백 + 장애 주입 테스트.
+- [ ] C2-5: B2 하네스로 프로바이더별 비교 — 환각률·오거부율·hit·토큰·비용·지연. Ollama(65%/60%) vs 상용. **환각 바닥 돌파 증명**. design-notes 표.
+- [ ] (선택) 저비용 단일 인스턴스 배포 — 상용 API로 Ollama 컨테이너 없이 경량 배포(백로그 배포 과제 해소).
+
+### 측정할 숫자 (목표)
+
+- 환각률/오거부율: Ollama 65%/60% → 상용 모델 **재측정**(바닥 돌파 여부가 핵심 결과). `HallucinationEvalTest`를 프로바이더별 실행.
+- 프로바이더별 토큰(입력/출력)·추정 비용·응답 지연 비교표.
+- 장애 주입: LLM 타임아웃/kill 시 degraded 폴백 동작·세마포어로 과부하 차단 확인.
+
+### 학습 확인 질문 (면접 대비)
+
+1. Spring AI로 프로바이더를 어떻게 추상화했나? 런타임 스위치의 핵심 이음새는 어디인가?
+2. 토큰·비용을 왜 프로바이더별로 관측하나? usage는 어디서 얻나(`call(String)` vs `call(Prompt)`)?
+3. LLM 장애(타임아웃·과부하) 시 degraded 폴백을 왜 두나? 세마포어는 정확히 무엇을 막나?
+4. 상용 모델이 환각 바닥을 깼다면 그게 임베딩 때문인가 LLM 때문인가? (범위=챗만 교체가 이 분리 진단을 가능케 함)
+
+---
+
 ## 백로그
 
 - **B3** SSE 토큰 스트리밍 — 8~15초 응답의 체감 개선, p95 first-token 측정 (chipthrone SSE 경험 재활용) → **C2에서 결합 검토**
