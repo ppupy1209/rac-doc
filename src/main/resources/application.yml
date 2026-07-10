@@ -70,3 +70,4 @@ management:
     distribution:
       percentiles-histogram:
         http.server.requests: true   # p99 등 히스토그램 지표(_bucket) 생성 → Grafana에서 백분위 계산
+        llm.latency: true            # LLM 호출 지연 p95/p99 (C2-3, 프로바이더별 비교)
