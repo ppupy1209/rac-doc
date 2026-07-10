@@ -5,9 +5,6 @@ import com.yeonwoo.askwiki.common.RagResult;
 import com.yeonwoo.askwiki.common.Source;
 import com.yeonwoo.askwiki.embedding.EmbeddingClient;
 import com.yeonwoo.askwiki.search.InMemoryVectorIndex;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -19,16 +16,17 @@ import java.util.stream.Collectors;
 @Component
 public class RagService {
 
-    private static final Logger log = LoggerFactory.getLogger(RagService.class);
-
     private final EmbeddingClient embeddingClient;
     private final InMemoryVectorIndex vectorIndex;
     private final ChatModel chatModel;
+    private final LlmMetrics llmMetrics;
 
-    public RagService(EmbeddingClient embeddingClient, InMemoryVectorIndex vectorIndex, ChatModel chatModel) {
+    public RagService(EmbeddingClient embeddingClient, InMemoryVectorIndex vectorIndex,
+                      ChatModel chatModel, LlmMetrics llmMetrics) {
         this.embeddingClient = embeddingClient;
         this.vectorIndex = vectorIndex;
         this.chatModel = chatModel;
+        this.llmMetrics = llmMetrics;
     }
 
     public RagResult answer(String question, int topK) {
@@ -79,11 +77,12 @@ public class RagService {
                 """.formatted(context, question);
 
         try {
-            // call(String) 대신 call(Prompt) → ChatResponse 로 받아 답변 텍스트뿐 아니라
-            // 토큰 usage(입력/출력)까지 확보한다. (C2-3에서 이 usage를 Micrometer 지표로 기록.)
+            // call(Prompt) → ChatResponse. 호출 지연을 재고, 응답의 토큰 usage를 Micrometer 지표로 기록한다. (C2-3)
+            long startNanos = System.nanoTime();
             ChatResponse response = chatModel.call(new Prompt(prompt));
+            llmMetrics.record(response, System.nanoTime() - startNanos);
+
             String answer = response.getResult().getOutput().getText();
-            logTokenUsage(response);
 
             List<Source> sources = matches.stream()
                     .map(m -> new Source(m.documentId(), m.title(), m.seq(), m.score()))
@@ -92,15 +91,6 @@ public class RagService {
 
         } catch (Exception e) {
             return new RagResult.LlmError(e.getMessage());
-        }
-    }
-
-    /** LLM 응답의 토큰 usage를 로깅한다. C2-3에서 Micrometer 카운터로 대체·확장 예정. */
-    private void logTokenUsage(ChatResponse response) {
-        Usage usage = response.getMetadata().getUsage();
-        if (usage != null) {
-            log.debug("LLM 토큰 usage - prompt={}, completion={}, total={}",
-                    usage.getPromptTokens(), usage.getCompletionTokens(), usage.getTotalTokens());
         }
     }
 }
