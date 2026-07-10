@@ -23,6 +23,15 @@ spring:
     virtual:
       enabled: ${SPRING_THREADS_VIRTUAL_ENABLED:false}
   ai:
+    model:
+      embedding: ollama
+      # OpenAI 스타터는 Gemini 챗(OpenAI 호환)에만 쓴다. 안 쓰는 OpenAI 모델 타입(이미지·오디오·모더레이션)은
+      # 빈 api-key로도 컨텍스트가 부팅되도록 비활성화한다. chat은 LlmProviderEnvironmentPostProcessor가 동적 설정.
+      image: none
+      audio:
+        speech: none
+        transcription: none
+      moderation: none
     ollama:
       base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
       embedding:
@@ -31,6 +40,21 @@ spring:
       chat:
         options:
           model: llama3.2:3b
+    # This OpenAI starter is used only for Gemini's OpenAI-compatible endpoint.
+    # Split it into a separate provider configuration before adding real GPT/OpenAI support.
+    openai:
+      api-key: ${GOOGLE_GENAI_API_KEY:}
+      base-url: https://generativelanguage.googleapis.com
+      chat:
+        completions-path: /v1beta/openai/chat/completions
+        options:
+          model: gemini-2.5-flash
+          # gemini-2.5-flash 기본 thinking 끄기 — RAG엔 사고 불필요. 스모크 실측: 12s→1s, 사고 토큰 0.
+          reasoning-effort: none
+
+askwiki:
+  llm:
+    provider: ${ASKWIKI_LLM_PROVIDER:ollama}
 
 management:
   endpoints:

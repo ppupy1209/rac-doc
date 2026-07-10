@@ -5,7 +5,12 @@ import com.yeonwoo.askwiki.common.RagResult;
 import com.yeonwoo.askwiki.common.Source;
 import com.yeonwoo.askwiki.embedding.EmbeddingClient;
 import com.yeonwoo.askwiki.search.InMemoryVectorIndex;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -13,6 +18,8 @@ import java.util.stream.Collectors;
 
 @Component
 public class RagService {
+
+    private static final Logger log = LoggerFactory.getLogger(RagService.class);
 
     private final EmbeddingClient embeddingClient;
     private final InMemoryVectorIndex vectorIndex;
@@ -72,7 +79,12 @@ public class RagService {
                 """.formatted(context, question);
 
         try {
-            String answer = chatModel.call(prompt);
+            // call(String) 대신 call(Prompt) → ChatResponse 로 받아 답변 텍스트뿐 아니라
+            // 토큰 usage(입력/출력)까지 확보한다. (C2-3에서 이 usage를 Micrometer 지표로 기록.)
+            ChatResponse response = chatModel.call(new Prompt(prompt));
+            String answer = response.getResult().getOutput().getText();
+            logTokenUsage(response);
+
             List<Source> sources = matches.stream()
                     .map(m -> new Source(m.documentId(), m.title(), m.seq(), m.score()))
                     .toList();
@@ -80,6 +92,15 @@ public class RagService {
 
         } catch (Exception e) {
             return new RagResult.LlmError(e.getMessage());
+        }
+    }
+
+    /** LLM 응답의 토큰 usage를 로깅한다. C2-3에서 Micrometer 카운터로 대체·확장 예정. */
+    private void logTokenUsage(ChatResponse response) {
+        Usage usage = response.getMetadata().getUsage();
+        if (usage != null) {
+            log.debug("LLM 토큰 usage - prompt={}, completion={}, total={}",
+                    usage.getPromptTokens(), usage.getCompletionTokens(), usage.getTotalTokens());
         }
     }
 }
