@@ -171,3 +171,17 @@ Testcontainers가 "Could not find a valid Docker environment"(Status 400, 빈 In
 docker-java의 구식 기본 API 버전(1.32)을 Docker Engine 29(최소 1.40)가 거부하는 것이 원인이었다.
 중간 계층(테스트 프레임워크→SDK→전송)을 하나씩 배제하고 프로토콜 레벨까지 내려가 진단한 사례.
 해결: 테스트 JVM에 `api.version=1.44` 고정(레포에 커밋) — 상세는 ROADMAP B1 트러블슈팅 노트.
+
+## 4. C2 딥다이브 — 상용 LLM 스위치, 그리고 무료 티어의 운영 현실 (진행 중)
+
+### 측정 — C2-5 1차: Ollama 재기준선과 "실행 간 요동" (2026-07-12, 맥)
+
+- **조건**: 맥(Apple Silicon, Docker Desktop = CPU 추론), 프롬프트 v4, 청크 500·topK 4, 모델 warm-up 후, 평가 실행에서만 `ASKWIKI_LLM_CALL_TIMEOUT_MS=120000`(함정 ① 참조). `HallucinationEvalTest` + 신규 `[LLM-USAGE]` 요약 출력.
+- **실측**: 환각률 **75.0%**(15/20)·오거부율 **10.0%**(3/30). 같은 프롬프트의 B2 실측(2026-07-07, 윈도우 PC)은 60%/3.3% → **실행 간 요동이 20/30문항 표본에서 ±3문항 수준**. 원인 = LLM 비결정성 + 소표본 + 머신 차이. **단일 실행 수치가 아니라 구간(환각 60~75%)으로 읽어야 하고, 프로바이더 비교는 같은 날·같은 머신 기준선(75%/10%)과 해야 공정하다.** 결론은 불변: 로컬 3B의 환각 바닥은 높다.
+- **사용량(C2-3 관측 배선의 실전 검증)**: calls 50·degraded 0·토큰 in 50,885/out 3,190(호출당 평균 ~1,018/~64)·지연 mean 8.8s/max 44.3s·LLM 합계 441s — 러너 전체 446s의 **99%가 LLM 시간**. Micrometer 지표가 provider 태그와 함께 러너 요약으로 나온다.
+
+### 함정 3건 — 평가 하네스는 인프라와 싸운다 (2026-07-12, 글감)
+
+- **① 장애격리 기본값이 평가를 죽임**: C2-4 가드(call-timeout 20s)가 콜드 모델 로드(2GB, 첫 호출 >20s)에 발동 → Degraded 폴백 → 러너 즉사. B2 측정 때(가드 도입 전)는 없던 간섭이 보호장치 도입으로 생겼다. 해결 = warm-up + 평가 실행만 타임아웃 완화(**양 프로바이더 동일 적용 = 조건 대칭**). 교훈: **운영 보호장치와 측정 하네스는 요구가 다르다 — 평가는 품질을 재는 도구지 가용성을 재는 도구가 아니다.**
+- **② Gradle up-to-date 캐시가 프로바이더 스위치를 무시**: env만 바꾼 재실행을 `:evalTest UP-TO-DATE`로 스킵 → 이전(ollama) 리포트를 gemini 결과로 기록할 뻔. `[LLM-USAGE]`의 provider 태그가 잡아냈다 — **결과에 측정 조건을 태깅해두면 조건 착오가 스스로 드러난다**(B1 3-7 "측정 방법이 결과를 만든다"의 자매 사례). 수정: evalTest에 `outputs.upToDateWhen { false }` — 비결정적 러너에 캐시 재사용은 무의미.
+- **③ 무료 티어의 실측 한도가 실험 설계를 지배**: gemini-2.5-flash 무료 = **RPM 5·RPD 20 실측**(계획 시점 참고치 10 RPM과 다름 — 한도표는 이제 계정별 AI Studio 페이지로만 제공) → **50문항 러너가 구조적으로 불가**(하루 20호출). 부수 발견: Spring AI 기본 에러핸들러는 429를 재시도하지 않음(4xx=non-transient) → 러너에 pacing 노브(`askwiki.eval.pacing-ms`, Gemini는 13s) 추가. 2.5-flash-lite는 신규 사용자 차단("no longer available to new users"). 3.1-flash-lite·3.5-flash는 프로브 200 확인(`reasoning_effort:none` 정상·사고 토큰 0). **"무료 강한 모델" 경로 자체가 측정 대상이 됐다** — 다음 결정: 3.x 무료 재시도(3.5-flash→lite 폴백) vs 유료 Tier 1.
