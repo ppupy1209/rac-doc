@@ -32,6 +32,9 @@ import java.util.stream.Collectors;
 public class EsVectorIndex implements VectorIndex {
 
     private static final int VECTOR_DIMS = 768;
+    // 단일 벌크로 전량을 보내면 N이 커질 때 요청 본문(수백 MB)이 힙과 ES http.max_content_length(기본 100MB)를
+    // 넘긴다(20k 스케일 벤치에서 OOM으로 실측). 배치로 나눠 각 벌크 본문을 유계로 유지한다.
+    private static final int BULK_BATCH_SIZE = 500;
 
     private record IndexedChunk(Long documentId, int seq, float[] vector) {}
 
@@ -64,9 +67,10 @@ public class EsVectorIndex implements VectorIndex {
         createIndex();
 
         List<Chunk> chunks = chunkRepository.findAllByOrderByIdAsc();
-        if (!chunks.isEmpty()) {
+        for (int from = 0; from < chunks.size(); from += BULK_BATCH_SIZE) {
+            List<Chunk> batch = chunks.subList(from, Math.min(from + BULK_BATCH_SIZE, chunks.size()));
             BulkRequest.Builder request = new BulkRequest.Builder().index(indexName);
-            for (Chunk chunk : chunks) {
+            for (Chunk chunk : batch) {
                 request.operations(operation -> operation.index(index -> index
                         .id(chunk.getId().toString())
                         .document(toIndexedChunk(chunk))));
