@@ -272,9 +272,11 @@
 
 ---
 
-## Phase C1 — 벡터 DB 이행 (딥다이브 ③, 착수 2026-07-12)
+## Phase C1 — 벡터 DB 이행 (딥다이브 ③, ✅ 완료 2026-07-12)
 
 > **목표**: "붙여봤다"가 아니라 **"이행하며 정합성(B1 패턴)을 지켰고, 회귀 없음(B2 하네스)을 증명했다"**. 구 백로그 B6 승격, 채용 공고 "벡터 DB 기반 RAG" 직접 대응. 강의 접목 P1(2026-07-11) 포함: ES 후보는 강의 섹션 7·8 실습으로 검증, Spring AI `VectorStore` 인터페이스·ETL 비교 결정.
+>
+> **✅ 완료 요약 (2026-07-12)**: ES kNN 이행 완료 — 포트 추출→ES 어댑터→B1 정합성 4종 ES 재증명(Step 2), 측정 5종(Step 3). **핵심 수치**: hit rate 회귀 없음(93.3 vs 90.0@4, 차이는 부동소수 경로), 20k 지연 역전(인메모리 22.8ms→ES 12.8ms), recall dial(0.83@nc100), 반영 지연 refresh 계층(127→879ms), 기동 재빌드 0. 벤치가 프로덕션 결함(`rebuild()` 무제한 벌크 OOM) 발견·수정. 구현은 Codex 위임·Claude 검증, 측정은 Claude 직접. 상세 design-notes §5.
 
 ### 문제 (착수 전 실측·계산, 2026-07-12)
 
@@ -299,7 +301,8 @@
 
 - [x] Step 1 ✅ (2026-07-12): **ES kNN + 자체 포트(`VectorIndex`) 어댑터** 결정(연우님) — 채택·기각 근거 design-notes §5
 - [x] Step 2 ✅ (2026-07-12): 포트 추출 → ES 인프라 → 어댑터 → B1 패턴 재증명, 전부 Codex 작성·Claude 검증. 2-1 `VectorIndex` 포트(동작 불변, `635431b`) · 2-2 ES compose 8.17.4+네이티브 클라이언트+스모크(`a7694e1`) · 2-3 `EsVectorIndex`(_id=chunkId 멱등·kNN·점수 역변환 2s−1·refresh 프로퍼티)+`askwiki.vector-index.impl` 스위치+계약 테스트 4(`89e5a10`) · 2-4 **B1 정합성 불변식 4종(유령 0·relay 반영+멱등·크래시 무유실·삭제 통합)을 ES 구현으로 재증명**(`66d9908`). 검증 중 Claude 수정 2건: 괄호 누락 컴파일 에러(2-3), **목 벡터 2차원→768차원**(ES가 dims 강제 — InMemory엔 없는 제약이라 B1 픽스처 복사 시 걸리는 함정, 2-4). 전체 스위트 11클래스 그린.
-- [ ] Step 3: 이행 검증·측정 — 3-① hit rate 동등성 ✅(93.3 vs 90.0@4, `48e0838`) · 3-② 20k 스케일 벤치 ✅(지연 22.8→12.8ms·recall 0.83@nc100·dial·rebuild 배치 수정, 2026-07-12) · 남음: 반영 지연(B1 126.7ms + ES refresh)·기동 시간·ETL 비교(P1-②)
+- [x] Step 3 ✅ (2026-07-12): 이행 검증·측정 5종 완료 — 3-① hit rate 동등성(93.3 vs 90.0@4, `48e0838`) · 3-② 20k 스케일 벤치(지연 22.8→12.8ms·recall 0.83@nc100·dial·rebuild 배치 수정 `26e849c`) · 3-③ 반영 지연(ES refresh 계층 127→879ms `7cba2cc`) · 3-④ 기동 시간(ES 재시작 재빌드 0 vs 인메모리 6.3s) · 3-⑤ ETL 비교(Chunker=TokenTextSplitter, 짧은 문서 수렴 → Chunker 유지). 상세 design-notes §5.
+- [ ] (강의 접목 P1-②) Spring AI ETL vs Chunker ✅ 3-⑤에 흡수 — 짧은 문서라 수렴, Chunker 유지 결정.
 - [ ] (강의 접목 P1-②) Spring AI ETL(DocumentReader·TokenTextSplitter) vs 자체 Chunker+PDFBox — B2-5 매트릭스 재실행으로 비교, 채택은 결과로
 
 ### 측정할 숫자 (목표)
