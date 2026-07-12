@@ -48,8 +48,10 @@ spring:
       chat:
         completions-path: /v1beta/openai/chat/completions
         options:
-          model: gemini-2.5-flash
-          # gemini-2.5-flash 기본 thinking 끄기 — RAG엔 사고 불필요. 스모크 실측: 12s→1s, 사고 토큰 0.
+          # C2-5 확정 (2026-07-12): 무료 티어 계정 실측 — 2.5-flash·3.5-flash는 RPD 20이라 50문항 평가 불가,
+          # 3.1-flash-lite만 RPM 15·RPD 500으로 완주 가능. 품질 실측 환각 0%·오거부 6.7% (design-notes §4).
+          model: gemini-3.1-flash-lite
+          # thinking 끄기 — RAG엔 사고 불필요. 2.5-flash 스모크 12s→1s·사고 토큰 0, 3.1-flash-lite 실측 mean 637ms.
           reasoning-effort: none
 
 askwiki:
