@@ -298,7 +298,7 @@
 ### 과제 (Step — 결정·핵심 구현은 연우님 직접, step-by-step)
 
 - [x] Step 1 ✅ (2026-07-12): **ES kNN + 자체 포트(`VectorIndex`) 어댑터** 결정(연우님) — 채택·기각 근거 design-notes §5
-- [ ] Step 2: `VectorIndex` 포트 추출(순수 리팩터링·동작 불변, 기존 스위트 그린 유지) → 새 저장소 compose 추가 → 어댑터 구현 → B1 패턴 이식(relay→포트, 멱등 upsert·문서 삭제) → Ghost/Relay 테스트를 어댑터 구현으로도 그린 **(진행: 2-1 포트 추출 ✅ · 2-2 ES 인프라 ✅ · 2-3 EsVectorIndex 어댑터+선택 프로퍼티 ✅ 2026-07-12, Codex 작성·Claude 검증, `635431b`·`a7694e1`·`89e5a10` — 네이티브 클라이언트·점수 역변환 결정은 design-notes §5)**
+- [x] Step 2 ✅ (2026-07-12): 포트 추출 → ES 인프라 → 어댑터 → B1 패턴 재증명, 전부 Codex 작성·Claude 검증. 2-1 `VectorIndex` 포트(동작 불변, `635431b`) · 2-2 ES compose 8.17.4+네이티브 클라이언트+스모크(`a7694e1`) · 2-3 `EsVectorIndex`(_id=chunkId 멱등·kNN·점수 역변환 2s−1·refresh 프로퍼티)+`askwiki.vector-index.impl` 스위치+계약 테스트 4(`89e5a10`) · 2-4 **B1 정합성 불변식 4종(유령 0·relay 반영+멱등·크래시 무유실·삭제 통합)을 ES 구현으로 재증명**(`66d9908`). 검증 중 Claude 수정 2건: 괄호 누락 컴파일 에러(2-3), **목 벡터 2차원→768차원**(ES가 dims 강제 — InMemory엔 없는 제약이라 B1 픽스처 복사 시 걸리는 함정, 2-4). 전체 스위트 11클래스 그린.
 - [ ] Step 3: 이행 검증·측정 — B2 hit rate 동등성(기준 93.3%@4)·검색 지연(20k 벤치: 인메모리 25ms vs 외부)·반영 지연(B1 126.7ms 대비)·시작 시간(rebuild 제거 효과)
 - [ ] (강의 접목 P1-②) Spring AI ETL(DocumentReader·TokenTextSplitter) vs 자체 Chunker+PDFBox — B2-5 매트릭스 재실행으로 비교, 채택은 결과로
 
