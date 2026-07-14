@@ -332,7 +332,7 @@
 
 ### 구성요소 & Step (착수 시 순서 확정)
 
-- [ ] **C3-1 에이전틱 검색 루프** — `ChatClient`에 검색을 `@Tool`로 제공 → LLM이 검색 필요 판단·질문 재작성·다중 검색을 스스로(기존 `search_wiki` 자산 재사용). 단발 대비 B2 비교.
+- [x] **C3-1 에이전틱 검색 루프 — 구현 완료(측정 대기), 2026-07-14** — `AgenticRagService`(ChatClient + **per-call** `WikiSearchTool` 도구, 전역 빈 아님 → **C4 순환 회피**)로 LLM이 검색 필요 판단·질의 재작성·다중 검색 주도. 단발 `RagService`는 유지(A/B용). Gemini tool-calling **선검증 통과**(OpenAI-compat `finish_reason:tool_calls`). Codex 위임·Claude 검증(컴파일 + 전체 44 그린, 컨텍스트 부팅 OK). **남음 = 단발 vs 에이전틱 B2 측정 + 멀티홉 golden 확장.**
 - [ ] **C3-2 질문 분류/라우팅** — Structured Output(`ChatClient.entity()`)로 타입 판별(위키 대상 / 즉답 / 모호→되묻기). 강의 섹션 6 CS 분류 응용.
 - [ ] **C3-3 멀티턴(ChatMemory)** — 대화 맥락 기반 follow-up 재작성. 웹 UI 단일턴 → 진짜 챗봇.
 - [ ] **C3-4 검증** — B2 하네스 + **멀티턴/멀티홉 golden set 확장**(현행 단일턴 50문항).
