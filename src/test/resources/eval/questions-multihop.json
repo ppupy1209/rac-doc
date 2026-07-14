@@ -1,0 +1,11 @@
+{
+  "_comment": "C3-1 멀티홉 평가셋 — 서로 다른 2개 문서의 사실이 둘 다 있어야 완전한 답. 단발 vs 에이전틱 비교용. 정답 판정 = factsA(문서1)에서 최소 1개 AND factsB(문서2)에서 최소 1개 포함. Claude 초안 → 연우님 사실검수 필요.",
+  "multihop": [
+    { "id": "m1", "question": "신입사원이 입사 첫날 받는 장비·계정은 무엇이고, 퇴직할 때 그것들을 어떻게 처리하나요?", "docs": ["onboarding", "security"], "factsA": ["노트북", "계정"], "factsB": ["반납", "회수"], "difficulty": "hard" },
+    { "id": "m2", "question": "업무용 노트북이 고장나면 수리를 어디에 요청하고, 수리 전에 자료를 개인 USB에 복사해도 되나요?", "docs": ["equipment", "security"], "factsA": ["IT지원팀"], "factsB": ["금지", "승인"], "difficulty": "hard" },
+    { "id": "m3", "question": "연말정산 증빙 서류 제출 기한과, 미사용 복지 포인트가 다음 해로 이월되는지 알려주세요.", "docs": ["salary", "welfare"], "factsA": ["1월 15일", "15일"], "factsB": ["이월"], "difficulty": "hard" },
+    { "id": "m4", "question": "본인이 결혼하면 경조사 휴가는 며칠이고, 사내 경조사 지원은 무엇으로 구성되나요?", "docs": ["vacation", "welfare"], "factsA": ["5일"], "factsB": ["화환", "경조금"], "difficulty": "hard" },
+    { "id": "m5", "question": "재택근무는 언제까지 신청하고, 반차는 몇 번을 써야 연차 하루가 되나요?", "docs": ["attendance", "vacation"], "factsA": ["전날", "팀장", "6시"], "factsB": ["2회", "두 번"], "difficulty": "hard" },
+    { "id": "m6", "question": "급여일은 매월 며칠이고, 국내 출장 숙박비는 1박 최대 얼마까지 지원되나요?", "docs": ["salary", "expense"], "factsA": ["25일"], "factsB": ["10만"], "difficulty": "medium" }
+  ]
+}
