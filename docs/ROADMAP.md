@@ -335,7 +335,10 @@
 - [x] **C3-1 에이전틱 검색 루프 — 구현 완료(측정 대기), 2026-07-14** — `AgenticRagService`(ChatClient + **per-call** `WikiSearchTool` 도구, 전역 빈 아님 → **C4 순환 회피**)로 LLM이 검색 필요 판단·질의 재작성·다중 검색 주도. 단발 `RagService`는 유지(A/B용). Gemini tool-calling **선검증 통과**(OpenAI-compat `finish_reason:tool_calls`). Codex 위임·Claude 검증(컴파일 + 전체 44 그린). **측정 완료(2026-07-14) = 정직한 한계**: 강한 모델(Gemini)은 OpenAI-compat 다중턴 tool의 `thought_signature`로 HTTP 400 차단(단일턴 RAG는 OK), 약한 모델(Ollama 3B)은 돌지만 멀티홉 이득 없음(단발 2/6 vs 에이전틱 1/6 @topK4, 둘 다 0/6 @topK2·더 느림). 하네스 `MultiHopComparisonEvalTest`+`questions-multihop.json`(6문항, 검수 대기). **다음 레버 = 강한 네이티브-tool 모델(Claude/Spring AI 1.1 google-genai)**. 상세 design-notes §7.
 - [x] **C3-2 질문 분류/라우팅 — 구현 완료 (2026-07-14)** — Structured Output(`ChatClient.entity()`)로 타입 판별(위키 대상 / 즉답 / 모호→되묻기). 강의 섹션 6 CS 분류 응용. **단일턴 분류라 C3-1의 다중턴 tool 벽을 우회 → 무료 Gemini로 실측 가능**(design-notes §7). 설계 확정(연우님): 신설 `routing` 패키지(`QuestionType`·`QuestionRoute(type,message)`·`QuestionRouter`) → `AskService` seam 라우팅(→`/api/ask`·MCP 공유), `RagResult.Clarify` 신설, message는 분류 호출이 함께 생성(1콜), `askwiki.routing.enabled` 기본 off + classify fail-open→WIKI. 범위 = **코어+결정적 단위테스트만**, 분류 정확도 측정은 C3-4. Codex 위임·Claude 검증 — **전체 49 그린**(44→+5), 풀 컨텍스트 부팅 OK(순환 없음). Claude 검증 수정 2건: denylist 금칙어→`사내`, eval 테스트 2곳 `RagResult` switch에 `Clarify` arm(sealed 컴파일러가 잡음).
 - [ ] **C3-3 멀티턴(ChatMemory)** — 대화 맥락 기반 follow-up 재작성. 웹 UI 단일턴 → 진짜 챗봇.
-- [ ] **C3-4 검증** — B2 하네스 + **멀티턴/멀티홉 golden set 확장**(현행 단일턴 50문항).
+- [ ] **C3-4 검증 + 라우팅 하드닝** — B2 하네스 + **멀티턴/멀티홉 golden set 확장**(현행 단일턴 50문항) + **C3-2 분류 정확도**(golden set·confusion, 라이브 Gemini/Ollama).
+    - **C3-2 리뷰 이월 2건 — 라우팅을 실제로 켜는 단계가 여기라 함께 처리** (2026-07-14 연우님 결정. 리뷰 상세: design-notes §7):
+        - **분류 호출에 `LlmCallGuard` 미적용**: RAG 호출은 세마포어+타임아웃(C2-4)으로 보호되는데 그 앞에 붙는 분류 호출은 무방비 — `try/catch`는 예외만 잡고 **hang은 못 막는다**. C2-5의 "콜드 로드가 가드 20s에 걸림" 함정이 그대로 재현될 자리. 걸림돌: `LlmCallGuard.call(ChatModel, Prompt)` 시그니처가 `ChatClient.entity()`(구조화 출력)와 안 맞아 소규모 리팩터 필요.
+        - **분류 호출이 `LlmMetrics`에 미기록**: 라우팅 on이면 캐시 미스마다 보이지 않는 LLM 호출이 1건씩 추가 → `llm.tokens`·`llm.cost`·`llm.calls` **과소 집계**. 공고 "토큰 최적화"·C2-3 투자에 정확히 구멍이 나는 지점이라 측정 전에 메워야 한다.
 
 ### 정직한 설계 전제 (착수 전 명시)
 
