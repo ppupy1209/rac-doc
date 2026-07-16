@@ -135,8 +135,11 @@ class MultiTurnRewriteEvalTest {
             }
 
             System.out.println(String.format(
-                    "[REWRITE] id=%s anchor=%s off@4=%s on@4=%s | \"%s\" -> \"%s\"",
-                    id, anchor, offHit4 ? "HIT" : "MISS", onHit4 ? "HIT" : "MISS", followUp, standalone
+                    "[REWRITE] id=%s anchor=%s off@4=%s(rank %s) on@4=%s(rank %s) | \"%s\" -> \"%s\"",
+                    id, anchor,
+                    offHit4 ? "HIT" : "MISS", rankOf(offTopDocIds, expectedDocId),
+                    onHit4 ? "HIT" : "MISS", rankOf(onTopDocIds, expectedDocId),
+                    followUp, standalone
             ));
             if (total < multiTurn.size()) {
                 pace(pacingMs);
@@ -210,6 +213,18 @@ class MultiTurnRewriteEvalTest {
         return topDocIds.stream()
                 .limit(k)
                 .anyMatch(expectedDocId::equals);
+    }
+
+    /**
+     * 기대 문서가 top-8에서 몇 위인지(없으면 "8+"). MISS가 근소한 순위 밀림인지 의미적 실패인지 가르는 진단값이며,
+     * 채점에는 쓰이지 않는다.
+     */
+    private String rankOf(List<Long> topDocIds, Long expectedDocId) {
+        if (expectedDocId == null) {
+            return "-";
+        }
+        int index = topDocIds.indexOf(expectedDocId);
+        return index < 0 ? "8+" : String.valueOf(index + 1);
     }
 
     private double hitRate(int hits, int total) {
