@@ -23,6 +23,9 @@ services:
       # 질문 분류·라우팅 (C3-2). 약한 모델에선 전부 WIKI로 찍는 축퇴 분류기가 되므로(41.7% 실측)
       # 기본 off. gemini일 때만 켤 것(97.2% 실측).
       ASKWIKI_ROUTING_ENABLED: ${ASKWIKI_ROUTING_ENABLED:-false}
+      # 하이브리드 검색 (B5). BM25(어휘)+kNN(의미)을 자체 RRF로 융합. **VECTOR_INDEX_IMPL=elasticsearch일 때만 동작**.
+      # 실측: hit rate@1 36.7% → 90.0%, @4 90.0% → 100%(30문항). 켜면 기동 시 1회 재색인(본문 색인)이 돈다.
+      ASKWIKI_SEARCH_HYBRID: ${ASKWIKI_SEARCH_HYBRID:-false}
     depends_on:
       mysql:
         condition: service_healthy

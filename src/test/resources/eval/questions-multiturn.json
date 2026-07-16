@@ -1,5 +1,5 @@
 {
-  "_comment": "C3-3 멀티턴 재작성 A/B용 골든셋. 각 항목은 2턴 대화다: turn1(주제를 세우는 질문) + turn1Answer(대화 기록에 넣을 도우미 답변, 코퍼스 사실에 근거) + followUp(문맥 의존 후속 질문). 측정: followUp을 (OFF) 그대로 임베딩 vs (ON) 재작성 후 임베딩 → expectedDocSlug가 topK에 잡히는가. turn1Answer를 스크립트로 고정한 이유: 재작성만을 변수로 두기 위해(turn1의 답변 품질이 결과에 섞이지 않게) — C2의 '임베딩 고정' 통제와 같은 규칙. anchor 필드는 리깅 방지용 자기점검이며 보고용 층화(strata)일 뿐 A/B의 입력이 아니다(라벨을 바꿔도 전체 hit rate는 불변): none=followUp에 기대 문서로 이어질 검색 키가 없음, weak=키 일부가 남아 재작성 없이도 맞을 수 있음. 의도적으로 섞었다. 2026-07-14 독립 검수 반영: salary-payday-holiday를 none→weak로 정정(아래 note) → 현재 none 4 / weak 4. 주의: none의 '재작성 없으면 검색 불가'는 의도이지 보장이 아니다 — 실측에서 none 항목 4개 중 2개(welfare·onboarding)가 재작성 없이도 @4에 잡혔다. 그리고 항목 수가 4/4로 작아 층화 비교는 방향 참고용일 뿐 통계적 변별력이 없다(1건 = 25pp).",
+  "_comment": "C3-3 멀티턴 재작성 A/B용 골든셋. 각 항목은 2턴 대화다: turn1(주제를 세우는 질문) + turn1Answer(대화 기록에 넣을 도우미 답변, 코퍼스 사실에 근거) + followUp(문맥 의존 후속 질문). 측정: followUp을 (OFF) 그대로 임베딩 vs (ON) 재작성 후 임베딩 → expectedDocSlug가 topK에 잡히는가. turn1Answer를 스크립트로 고정한 이유: 재작성만을 변수로 두기 위해(turn1의 답변 품질이 결과에 섞이지 않게) — C2의 '임베딩 고정' 통제와 같은 규칙. anchor 필드는 리깅 방지용 자기점검이며 보고용 층화(strata)일 뿐 A/B의 입력이 아니다(라벨을 바꿔도 전체 hit rate는 불변): none=followUp에 기대 문서로 이어질 검색 키가 없음, weak=키 일부가 남아 재작성 없이도 맞을 수 있음. 의도적으로 섞었다. 2026-07-14 독립 검수 반영: salary-payday-holiday를 none→weak로 정정(아래 note). 2026-07-16 B5-3 하이브리드 측정이 attendance-remote-apply의 오라벨을 잡아 none→weak 정정(아래 note) → 현재 **none 3 / weak 5**. 주의: none의 '재작성 없으면 검색 불가'는 의도이지 보장이 아니다 — 실측에서 none 항목 중 welfare·onboarding이 재작성 없이도 @4에 잡혔다. 그리고 항목 수가 3/5로 작아 층화 비교는 방향 참고용일 뿐 통계적 변별력이 없다 — **attendance 라벨 하나를 고치자 층화의 방향이 뒤집혔다**(@4 OFF 기준 none 50→66.7% / weak 75→60%, 즉 'none이 더 어렵다'가 사라졌다). 2026-07-14 검수가 층화를 '방향 참고용'으로 격하한 판단이 실측으로 재확인된 셈이다.",
   "multiTurn": [
     {
       "id": "salary-payday-holiday",
@@ -40,7 +40,8 @@
       "turn1Answer": "재택근무는 주 2일까지 허용됩니다.",
       "followUp": "언제까지 신청해야 해요?",
       "expectedDocSlug": "attendance",
-      "anchor": "none"
+      "anchor": "weak",
+      "note": "B5-3 하이브리드 측정(2026-07-16)에서 none→weak 정정: followUp의 '신청해야'가 attendance.md의 정답 문장('전날 오후 6시까지 팀장에게 신청해야 한다')에 **토큰 그대로** 있다 → 기대 문서로 이어지는 검색 키가 남아 있으므로 이 파일 자신의 weak 정의에 해당한다. salary-payday-holiday와 같은 유형의 오라벨이고, 최초 라벨(none)은 '재택근무'라는 주제어만 본 판단 착오다. **이번엔 사람이 아니라 측정이 잡았다**: anchor=none인데 BM25가 5위→1위로 고쳤다 = 어휘 키가 실제로 있다는 기계적 증거(none 라벨이 정당한 3건은 BM25에서 순위가 전혀 안 움직였다)."
     },
     {
       "id": "vacation-tenure-bonus",
