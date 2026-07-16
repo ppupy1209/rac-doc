@@ -30,6 +30,17 @@
 - 커밋 메시지: `feat:`/`fix:`/`test:`/`docs:` 등 영문 타입 + 한글 설명.
 - 진척·판단·측정은 그때그때 `docs/START-HERE.md` 진행 로그와 `docs/design-notes.md`에 기록한다.
 
+## 문서에 캡처 넣기 (2026-07-16 연우님 지시)
+
+**글로 열 줄 쓸 것을 화면 한 장이 대신한다.** 실행 결과·UI·대시보드가 있는 글은 캡처를 넣어 가독성을 올린다.
+캡처는 **Claude가 직접 찍는다**(연우님에게 요청하지 않는다).
+
+- 넣는 곳: 포트폴리오(`personal` 레포)는 `![설명](/projects/파일명.png)` — 형제 `chipthrone.mdx` 관례. 이 레포는 `docs/images/`.
+- **품질 스위치를 켜고 찍는다.** 기본 Ollama 3B는 환각 75%라 최악의 답이 그림으로 박제된다 → `.env`에 `ASKWIKI_LLM_PROVIDER=gemini` 필수. 캐시 히트(`10ms·캐시 응답`)도 실지연을 가리므로 찍기 전 `redis-cli FLUSHALL`.
+- 방법 = **헤드리스 Chrome + CDP**(Node 22의 내장 `WebSocket`, 의존성 0). 앱을 실제로 구동해 질문까지 넣고 찍는다.
+  - ⚠️ 인앱 브라우저(`mcp__Claude_Browser__computer`)의 screenshot·zoom은 이 PC에서 **30s 타임아웃으로 실패**한다(read_page·click·form_input은 정상). 픽셀이 필요하면 CDP로 간다.
+- **찍은 뒤 눈으로 본다.** 파일 경로·빌드 통과는 렌더 성공이 아니다(MCP devlog 캡처가 그래서 오래 미확인으로 남았다). `naturalWidth > 0`까지 확인하면 확실하다.
+
 ## 커밋 전 검사 (금칙어 스캐너)
 
 공개 레포라 민감어가 새어나가지 않도록 커밋 전 자동 검사를 둔다.
