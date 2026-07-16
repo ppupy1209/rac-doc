@@ -1,0 +1,69 @@
+{
+  "_comment": "C3-3 멀티턴 재작성 A/B용 골든셋. 각 항목은 2턴 대화다: turn1(주제를 세우는 질문) + turn1Answer(대화 기록에 넣을 도우미 답변, 코퍼스 사실에 근거) + followUp(문맥 의존 후속 질문). 측정: followUp을 (OFF) 그대로 임베딩 vs (ON) 재작성 후 임베딩 → expectedDocSlug가 topK에 잡히는가. turn1Answer를 스크립트로 고정한 이유: 재작성만을 변수로 두기 위해(turn1의 답변 품질이 결과에 섞이지 않게) — C2의 '임베딩 고정' 통제와 같은 규칙. anchor 필드는 리깅 방지용 자기점검: none=followUp에 주제어가 전혀 없음(재작성 없으면 검색 불가), weak=주제어 일부가 남아 재작성 없이도 맞을 수 있음. 의도적으로 섞었다.",
+  "multiTurn": [
+    {
+      "id": "salary-payday-holiday",
+      "turn1": "급여는 언제 지급되나요?",
+      "turn1Answer": "급여는 매월 25일에 지급됩니다.",
+      "followUp": "그날이 휴일이면요?",
+      "expectedDocSlug": "salary",
+      "anchor": "none"
+    },
+    {
+      "id": "security-password-rotation",
+      "turn1": "비밀번호는 몇 자 이상이어야 하나요?",
+      "turn1Answer": "비밀번호는 최소 12자 이상이어야 하며 영문 대소문자, 숫자, 특수문자를 포함해야 합니다.",
+      "followUp": "얼마나 자주 바꿔야 해요?",
+      "expectedDocSlug": "security",
+      "anchor": "none"
+    },
+    {
+      "id": "welfare-point-carryover",
+      "turn1": "복지 포인트는 1년에 얼마 나오나요?",
+      "turn1Answer": "복지 포인트는 매년 1인당 120만원이 지급됩니다.",
+      "followUp": "안 쓰면 어떻게 되나요?",
+      "expectedDocSlug": "welfare",
+      "anchor": "none"
+    },
+    {
+      "id": "onboarding-probation-end",
+      "turn1": "수습 기간은 얼마나 되나요?",
+      "turn1Answer": "수습 기간은 3개월입니다.",
+      "followUp": "끝나면 어떻게 되나요?",
+      "expectedDocSlug": "onboarding",
+      "anchor": "none"
+    },
+    {
+      "id": "attendance-remote-apply",
+      "turn1": "재택근무는 주에 며칠까지 할 수 있나요?",
+      "turn1Answer": "재택근무는 주 2일까지 허용됩니다.",
+      "followUp": "언제까지 신청해야 해요?",
+      "expectedDocSlug": "attendance",
+      "anchor": "none"
+    },
+    {
+      "id": "vacation-tenure-bonus",
+      "turn1": "연차 휴가는 며칠 부여되나요?",
+      "turn1Answer": "연차 휴가는 입사 1년 후 15일이 부여됩니다.",
+      "followUp": "3년 넘게 다니면 더 늘어나요?",
+      "expectedDocSlug": "vacation",
+      "anchor": "weak"
+    },
+    {
+      "id": "expense-trip-meal",
+      "turn1": "국내 출장 숙박비는 얼마까지 지원되나요?",
+      "turn1Answer": "국내 출장 숙박비는 1박 최대 10만원까지 실비로 지원합니다.",
+      "followUp": "식대는 하루 얼마예요?",
+      "expectedDocSlug": "expense",
+      "anchor": "weak"
+    },
+    {
+      "id": "equipment-laptop-repair",
+      "turn1": "업무용 노트북은 몇 년마다 교체하나요?",
+      "turn1Answer": "업무용 노트북은 4년 주기로 교체합니다.",
+      "followUp": "고장 나면 어디에 요청해요?",
+      "expectedDocSlug": "equipment",
+      "anchor": "weak"
+    }
+  ]
+}

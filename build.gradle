@@ -68,6 +68,11 @@ tasks.register('evalTest', Test) {
         includeTags 'eval'
     }
     systemProperty 'api.version', '1.44'
+    // 평가 러너는 한국어 질문·재작성 결과를 stdout에 찍어 정성 감사(audit)에 쓴다. 윈도우 테스트 JVM의
+    // 기본 stdout 인코딩(cp949)이 이를 뭉개 리포트가 판독 불가가 된다 → UTF-8 고정. (측정 숫자는 영향 없음 — 출력 경로만)
+    systemProperty 'file.encoding', 'UTF-8'
+    systemProperty 'stdout.encoding', 'UTF-8'
+    systemProperty 'sun.stdout.encoding', 'UTF-8'
     testClassesDirs = sourceSets.test.output.classesDirs
     classpath = sourceSets.test.runtimeClasspath
     // 20k 스케일 벤치는 인메모리 인덱스(20k×768 float)와 정답 대조를 한 프로세스에 올려 기본 워커 힙(~512m)엔 빠듯하다.
