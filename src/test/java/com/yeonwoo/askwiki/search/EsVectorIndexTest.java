@@ -236,7 +236,7 @@ class EsVectorIndexTest {
 
     private EsVectorIndex hybridVectorIndex() {
         return new EsVectorIndex(elasticsearchClient, embeddingCodec, chunkRepository, documentRepository,
-                indexName, true, true, "elasticsearch");
+                indexName, true, true, "elasticsearch", 0);
     }
 
     private void indexWithoutContent(Chunk chunk, float[] vector) throws Exception {

@@ -63,6 +63,7 @@ public class EsVectorIndex implements VectorIndex {
     private final boolean refreshOnWrite;
     private final boolean hybridSearchEnabled;
     private final String vectorIndexImplementation;
+    private final long numCandidatesOverride;
 
     public EsVectorIndex(ElasticsearchClient client,
                          EmbeddingCodec embeddingCodec,
@@ -71,7 +72,8 @@ public class EsVectorIndex implements VectorIndex {
                          @Value("${askwiki.es.index:askwiki-chunks}") String indexName,
                          @Value("${askwiki.es.refresh-on-write:false}") boolean refreshOnWrite,
                          @Value("${askwiki.search.hybrid:false}") boolean hybridSearchEnabled,
-                         @Value("${askwiki.vector-index.impl:memory}") String vectorIndexImplementation) {
+                         @Value("${askwiki.vector-index.impl:memory}") String vectorIndexImplementation,
+                         @Value("${askwiki.es.num-candidates:0}") long numCandidatesOverride) {
         this.client = client;
         this.embeddingCodec = embeddingCodec;
         this.chunkRepository = chunkRepository;
@@ -80,6 +82,21 @@ public class EsVectorIndex implements VectorIndex {
         this.refreshOnWrite = refreshOnWrite;
         this.hybridSearchEnabled = hybridSearchEnabled;
         this.vectorIndexImplementation = vectorIndexImplementation;
+        this.numCandidatesOverride = numCandidatesOverride;
+    }
+
+    /**
+     * kNN이 훑을 후보 수. 기본(0)은 기존 공식을 그대로 써 운영 동작을 불변으로 둔다.
+     * <p>후보 수는 kNN 재현율을 좌우한다(C1 실측 dial: nc 100 → recall 0.83, nc 200 → 0.879). 그런데 하이브리드는
+     * 융합 재료를 넓히려 더 많은 결과를 요구하므로 같은 공식이 벡터 단독보다 큰 nc를 만든다 — 그대로 A/B하면
+     * <b>"하이브리드가 좋다"와 "후보를 더 봤다"가 뒤섞인다</b>. B5-3은 이 노브로 팔마다 nc를 고정해 둘을 분리한다.
+     */
+    private long numCandidatesFor(long resultSize) {
+        if (numCandidatesOverride <= 0) {
+            return Math.max(100L, resultSize * 10L);
+        }
+        // Elasticsearch는 num_candidates >= k를 요구한다.
+        return Math.max(numCandidatesOverride, resultSize);
     }
 
     @Override
@@ -216,7 +233,7 @@ public class EsVectorIndex implements VectorIndex {
                         .field("vector")
                         .queryVector(toFloatList(queryVector))
                         .k(resultSize)
-                        .numCandidates(Math.max(100L, resultSize * 10L)))
+                        .numCandidates(numCandidatesFor(resultSize)))
                 // content is indexed for future BM25, but ChunkMatch remains hydrated from MySQL.
                 .source(source -> source.filter(filter -> filter.includes("documentId", "seq"))), IndexedChunk.class));
         return response.hits().hits();
