@@ -364,12 +364,16 @@
 
 ## Phase D — 포트폴리오 통합 체크리스트
 
-- [ ] `yeonwoo-dev/web/content/projects/ask-wiki.mdx` — work 프로젝트와 같은 구조(개요→문제→해결 전략→기술 선택 이유→검증), category는 side(Products)
-- [ ] 개발 기록(devlog) 후보: ①캐시는 왜 로컬/분산을 나눴나 ②인메모리 벡터 인덱스와 확장 경로 (→ `design-notes.md`에 초안 있음) ③B1 정합성 설계기 ④B2 평가 하네스
-- [ ] 아키텍처 다이어그램 3중 구조 등록 (mdx + architecture.ts + Arch 컴포넌트)
-- [ ] Products 등재 조건: 실제 상시 운영(또는 데모 가능한 배포) + 본인이 실사용
-- [ ] 이력서 반영은 **측정 성과가 나온 뒤**: Skills(Spring AI·k6·Grafana 등) + Side Project 한 줄
-- [ ] 정직성 규칙: 실측만, 측정 환경 명시, 재현 스크립트 커밋, AI 활용은 역할 구분해 표기
+> **작업 위치 = `C:\Users\SAMSUNG\personal`** (`ppupy1209/yeonwoo-dev` 레포의 실제 작업 사본). 브랜치 `feat/web-monochrome-redesign`, 미푸시 4커밋. 상세·문체 규칙·함정은 START-HERE §3 "Phase D" 불릿, 남은 것은 START-HERE §5-1.
+
+- [x] `web/content/projects/ask-wiki.mdx` ✅ (2026-07-16) — **category `study`·order 3**(side 아님, 연우님 결정). **간단한 개요만** 담고 깊이는 devlog으로(형제 `chipthrone`이 쓰는 side형 허브 모델 + study형 지표 배지의 하이브리드). 지표 배지 = 환각률 **75%→0%**.
+- [x] 개발 기록(devlog) **8편** ✅ (2026-07-16) — 기존 후보 4개(①캐시 ②인메모리 인덱스 ③B1 ④B2)는 **C1 이전에 쓴 낡은 목록이라 폐기**하고 재선정: `rag-basics`(RAG·임베딩 기초 + 프로젝트 목적 + Spring AI 첫인상) · `eval-harness`(B2) · `hallucination-floor`(B2→C2, 대표작) · `ghost-index`(B1, `hot-article-kafka`와 의도적 교차) · `vector-index-migration`(③→C1) · `multi-turn-rewrite`(C3-3) · `agentic-rag-limit`(C3-1/2, 정직한 실패) · `mcp-server`(C4).
+- [x] 아키텍처 다이어그램 3중 구조 등록 ✅ — `architecture.ts` + `arch/AskWikiArch.tsx` + `ArchitectureDiagram` DIAGRAMS 맵. RAG 흐름 5노드(질문→임베딩→벡터검색→프롬프트조립→답변+출처)라 **기초 이해에도 기여**. (`study` 프로젝트는 전부 전용 SVG를 갖는 관례 — `chipthrone`만 없음.)
+- [x] 정직성 규칙 준수 ✅ — 실측만·측정 환경 명시·정직한 한계 명기(`agentic-rag-limit`은 미증명 그대로, `multi-turn-rewrite`는 작은 코퍼스 한계 명시). **채용·이직 프레이밍은 전면 배제하고 학습 목적을 명시**(연우님 지시).
+- [ ] **웹 UI 채팅 화면 캡처** → `web/public/projects/`에 넣고 개요에 삽입. **Gemini 키를 넣고 띄운 화면이어야 함**(기본 3B는 환각 75%).
+- [ ] (결정) Virtual Threads·Redis 캐시 devlog 추가 여부 — 지금은 뺐음(`realtime-sensor-pipeline`과 결 겹침·RAG 서사 밖). 추가 시 Grafana 캡처 필요(`docs/images/vthreads-*.png` 재활용 가능).
+- [ ] 이력서 반영: Skills(Spring AI·Elasticsearch·k6·Grafana 등) + 프로젝트 한 줄 → `personal`의 `web/content/resume.json` · `output/pdf/`
+- [x] ~~Products 등재 조건(실제 상시 운영·데모 가능한 배포)~~ — **해당 없음.** 배포하지 않기로 결정(2026-07-16, 로컬 실행만). 그래서 `category: study`로 간다.
 
 ## 세션 시작 프롬프트 (복붙용)
 
