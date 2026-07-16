@@ -192,7 +192,7 @@ class HybridSearchMatrixEvalTest {
 
     private VectorIndex arm(boolean hybrid, long numCandidates) {
         return new EsVectorIndex(elasticsearchClient, embeddingCodec, chunkRepository, documentRepository,
-                indexName, true, hybrid, "elasticsearch", numCandidates);
+                indexName, true, hybrid, numCandidates);
     }
 
     private Map<String, Long> loadCorpus() throws IOException {

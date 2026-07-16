@@ -16,10 +16,6 @@ import com.yeonwoo.askwiki.document.Document;
 import com.yeonwoo.askwiki.document.DocumentRepository;
 import com.yeonwoo.askwiki.embedding.EmbeddingCodec;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -37,7 +33,6 @@ import java.util.stream.Collectors;
 @Component
 public class EsVectorIndex implements VectorIndex {
 
-    private static final Logger log = LoggerFactory.getLogger(EsVectorIndex.class);
     private static final int VECTOR_DIMS = 768;
     // RRF's conventional k=60 dampens the difference between adjacent ranks while preserving
     // each retriever's ordering; the value is the standard constant from the original RRF work.
@@ -62,7 +57,6 @@ public class EsVectorIndex implements VectorIndex {
     private final String indexName;
     private final boolean refreshOnWrite;
     private final boolean hybridSearchEnabled;
-    private final String vectorIndexImplementation;
     private final long numCandidatesOverride;
 
     public EsVectorIndex(ElasticsearchClient client,
@@ -72,7 +66,6 @@ public class EsVectorIndex implements VectorIndex {
                          @Value("${askwiki.es.index:askwiki-chunks}") String indexName,
                          @Value("${askwiki.es.refresh-on-write:false}") boolean refreshOnWrite,
                          @Value("${askwiki.search.hybrid:false}") boolean hybridSearchEnabled,
-                         @Value("${askwiki.vector-index.impl:memory}") String vectorIndexImplementation,
                          @Value("${askwiki.es.num-candidates:0}") long numCandidatesOverride) {
         this.client = client;
         this.embeddingCodec = embeddingCodec;
@@ -81,7 +74,6 @@ public class EsVectorIndex implements VectorIndex {
         this.indexName = indexName;
         this.refreshOnWrite = refreshOnWrite;
         this.hybridSearchEnabled = hybridSearchEnabled;
-        this.vectorIndexImplementation = vectorIndexImplementation;
         this.numCandidatesOverride = numCandidatesOverride;
     }
 
@@ -185,28 +177,6 @@ public class EsVectorIndex implements VectorIndex {
         List<Hit<IndexedChunk>> knnHits = searchKnnHits(queryVector, candidateCount);
         List<Hit<IndexedChunk>> bm25Hits = searchBm25Hits(queryText, candidateCount);
         return hydrate(fuseWithRrf(knnHits, bm25Hits, topK));
-    }
-
-    /**
-     * Rebuilds the index on startup whenever hybrid search is on, so the switch always starts from an
-     * index that agrees with MySQL. Narrower triggers cannot detect every disagreement: a missing index
-     * leaves existing chunks unsearchable, and chunks left from an earlier corpus can match MySQL's
-     * count while holding different ids. The index is derived data, and this rebuild is charged only to
-     * whoever turns hybrid on — the kNN-only default keeps Elasticsearch's zero-rebuild startup.
-     */
-    @EventListener(ApplicationReadyEvent.class)
-    public void rebuildForHybridSearch() {
-        if (!hybridSearchEnabled || !"elasticsearch".equals(vectorIndexImplementation)) {
-            return;
-        }
-
-        try {
-            int indexedChunks = rebuild();
-            log.info("Rebuilt Elasticsearch index {} with {} chunks for hybrid search", indexName, indexedChunks);
-        } catch (RuntimeException exception) {
-            // Elasticsearch is intentionally lazy at startup; a temporary outage must not stop the app.
-            log.warn("Could not rebuild Elasticsearch index for hybrid search; continuing startup", exception);
-        }
     }
 
     private List<ScoredHit> searchKnn(float[] queryVector, int topK) {

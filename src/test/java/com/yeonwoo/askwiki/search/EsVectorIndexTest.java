@@ -201,7 +201,7 @@ class EsVectorIndexTest {
         Chunk chunk = saveChunk(saveDocument("missing content"), 0, "rebuild must restore this content", chunkVector);
         indexWithoutContent(chunk, chunkVector);
 
-        hybridVectorIndex().rebuildForHybridSearch();
+        runHybridStartupRebuild();
 
         GetResponse<Map> response = elasticsearchClient.get(get -> get
                 .index(indexName)
@@ -215,7 +215,7 @@ class EsVectorIndexTest {
         Chunk chunk = saveChunk(saveDocument("no index yet"), 0, "hybrid must be able to find this", vector(0, 1.0f));
         elasticsearchClient.indices().delete(delete -> delete.index(indexName));
 
-        hybridVectorIndex().rebuildForHybridSearch();
+        runHybridStartupRebuild();
 
         GetResponse<Map> response = elasticsearchClient.get(get -> get
                 .index(indexName)
@@ -233,7 +233,7 @@ class EsVectorIndexTest {
         documentRepository.deleteAll();
         Chunk current = saveChunk(saveDocument("current corpus"), 0, "current chunk", vector(0, 1.0f));
 
-        hybridVectorIndex().rebuildForHybridSearch();
+        runHybridStartupRebuild();
 
         // The stale chunk left the index at the database's own count, so a count check cannot detect it.
         assertEquals(1, vectorIndex.size());
@@ -257,7 +257,12 @@ class EsVectorIndexTest {
 
     private EsVectorIndex hybridVectorIndex() {
         return new EsVectorIndex(elasticsearchClient, embeddingCodec, chunkRepository, documentRepository,
-                indexName, true, true, "elasticsearch", 0);
+                indexName, true, true, 0);
+    }
+
+    /** 기동 시 하이브리드가 켜진 Elasticsearch 모드가 밟는 경로. */
+    private void runHybridStartupRebuild() {
+        new VectorIndexStartupRebuild(hybridVectorIndex(), "elasticsearch", true).rebuildActiveIndex();
     }
 
     private void indexWithoutContent(Chunk chunk, float[] vector) throws Exception {
