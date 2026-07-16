@@ -388,7 +388,9 @@
 - [x] **B5-1 ✅ 완료 (2026-07-16)** — 포트 확장 + ES 본문 색인. **동작 불변 리팩터 + 데이터 확장**(새 인자는 아직 아무도 안 쓴다). Codex 위임·Claude 검증, **전체 69 그린**(68→+1). 결정 = **A안(포트 확장)**: `search(String queryText, float[] queryVector, int topK)`, InMemory는 queryText를 무시(어휘 검색 불가, 주석으로 명시), 벤치 경로는 랜덤 벡터라 `null` 전달. ES 매핑에 `content`(text·standard 분석기) 추가 + `add`/`rebuild`가 본문 색인. **본문 하이드레이션은 MySQL 유지**(ES의 content는 *검색용 필드*이지 진실의 원천이 아니다). `BULK_BATCH_SIZE=500` 유지 — 벡터 3KB(768×4B)가 본문 ~1.5KB를 지배하므로 C1의 OOM 교훈이 그대로 유효(Codex 판단·근거 주석).
     - **부수 개선 (검증 중 발견)**: `_source` 필터를 넣으며 **`vector`도 읽기에서 빠졌다** — 그동안 검색 히트마다 768 float를 되받고 있었다. 검색 경로는 vector를 안 쓰므로 안전하고 오히려 빨라진다. ⚠️ **단 C1이 기록한 ES 20k 지연(avg 12.84ms)은 벡터를 되받던 조건의 숫자**다 → B5-3에서 그걸 기준선으로 쓰지 말 것(조건이 달라졌다).
     - 🚧 **B5-2 선결 과제 발견 (Claude 검증)**: **기존 ES 인덱스는 옛 매핑이라 본문이 없다.** 살아있는 로컬 인덱스 실측 — `askwiki-chunks`의 필드가 `documentId, seq, vector`뿐이고 문서 8건 전부 `content` 없음. `rebuild()`는 delete→create라 부르면 해결되지만 **ES 모드는 기동 시 rebuild를 하지 않는다**(C1이 "기동 재빌드 0 vs 인메모리 6.3s"로 이점이라 기록한 바로 그 성질의 **뒷면**). → B5-2에서 BM25를 켜면 **기존 데이터가 조용히 0건**이 된다. **스키마를 바꿨는데 기존 데이터가 따라오지 않는다 = B1이 다룬 정합성의 사촌.**
-- [ ] **B5-2 구현**: ⚠️ **선결 = 재색인 경로 결정**(위 발견 — 기동 시 매핑에 `content`가 없으면 자동 rebuild할지 / 수동 트리거를 둘지 / 하이브리드 on일 때만 요구할지). 그 다음 BM25 질의 + kNN 질의 → **자체 RRF 융합**. `askwiki.search.hybrid` 스위치(기본 off)로 A/B 가능하게 — C3-2의 "기본 off + 결정적 스위트 불변" 선례
+- [ ] **B5-2 구현** (착수 2026-07-16). BM25 질의 + kNN 질의 → **자체 RRF 융합**. `askwiki.search.hybrid` 스위치(기본 off) — C3-2의 "기본 off + 결정적 스위트 불변" 선례.
+    - **결정 ① 재색인 = 하이브리드 on일 때만 요구** (연우님, 2026-07-16). 기본(off) 경로는 **C1의 "기동 재빌드 0"을 그대로 지킨다 — 대가는 스위치를 켠 사람만 치른다.** 판정은 매핑 유무가 아니라 **본문 없는 문서의 존재**로 한다(옛 인덱스에 새 `add`가 들어가면 ES 동적 매핑이 `content`를 만들어 버려 매핑 검사는 그 경우를 놓친다 — 데이터를 직접 묻는 편이 정직하다). 멱등: 이미 채워져 있으면 아무 일도 안 한다.
+    - **결정 ② 하이브리드에서 `ChunkMatch.score`는 RRF 융합 점수**다(코사인 아님). 순위가 두 신호의 융합이라 단일 코사인으로 표현할 수 없고, 억지로 코사인을 채우면 "이 순위가 유사도 때문"이라는 **거짓 인상**을 준다. **알려진 대가(부채로 남기지 않으려 여기 명시)**: 웹 UI 툴팁이 `유사도 ${score}`라 하이브리드 on에선 문구가 부정확해진다. 기본 off라 현재 사용자 영향은 0이고, **B5-4에서 하이브리드를 기본값으로 승격한다면 그때 UI 문구를 함께 고치는 것이 승격의 조건**이다. `ScoreDistributionEvalTest`(B2 임계값 조사)도 벡터 모드 전용으로 남는다.
 - [ ] **B5-3 측정**: B2 하네스로 **hit rate @1/@2/@4/@8 벡터 단독 vs 하이브리드**(승부처는 @1·@2) + 멀티턴 재작성 하네스로도 교차 확인. RRF의 k도 노브
 - [ ] **B5-4 판정·기록**: 개선이면 기본값 재결정, 아니면 **정직한 부정**(B2-5·C3-1 계열). nori 필요 여부도 이 숫자로 결정
 
@@ -420,14 +422,14 @@
 
 > **작업 위치 = `C:\Users\SAMSUNG\personal`** (`ppupy1209/yeonwoo-dev` 레포의 실제 작업 사본). 브랜치 `feat/web-monochrome-redesign`, 미푸시 4커밋. 상세·문체 규칙·함정은 START-HERE §3 "Phase D" 불릿, 남은 것은 START-HERE §5-1.
 
-- [x] `web/content/projects/ask-wiki.mdx` ✅ (2026-07-16) — **category `study`·order 3**(side 아님, 연우님 결정). **간단한 개요만** 담고 깊이는 devlog으로(형제 `chipthrone`이 쓰는 side형 허브 모델 + study형 지표 배지의 하이브리드). 지표 배지 = 환각률 **75%→0%**.
+- [x] `web/content/projects/ask-wiki.mdx` ✅ (2026-07-16) — **category `side`·order 3**(2026-07-16 실측 정정: 최초엔 `study`로 썼으나 이후 사이트 섹션·내비 재편 커밋 `920c463`에서 `side`로 바뀌었고 **연우님 확인 = 의도한 변경**. 형제 `chipthrone`도 `side`다). **간단한 개요만** 담고 깊이는 devlog으로(형제 `chipthrone`이 쓰는 side형 허브 모델 + study형 지표 배지의 하이브리드). 지표 배지 = 환각률 **75%→0%**.
 - [x] 개발 기록(devlog) **8편** ✅ (2026-07-16) — 기존 후보 4개(①캐시 ②인메모리 인덱스 ③B1 ④B2)는 **C1 이전에 쓴 낡은 목록이라 폐기**하고 재선정: `rag-basics`(RAG·임베딩 기초 + 프로젝트 목적 + Spring AI 첫인상) · `eval-harness`(B2) · `hallucination-floor`(B2→C2, 대표작) · `ghost-index`(B1, `hot-article-kafka`와 의도적 교차) · `vector-index-migration`(③→C1) · `multi-turn-rewrite`(C3-3) · `agentic-rag-limit`(C3-1/2, 정직한 실패) · `mcp-server`(C4).
 - [x] 아키텍처 다이어그램 3중 구조 등록 ✅ — `architecture.ts` + `arch/AskWikiArch.tsx` + `ArchitectureDiagram` DIAGRAMS 맵. RAG 흐름 5노드(질문→임베딩→벡터검색→프롬프트조립→답변+출처)라 **기초 이해에도 기여**. (`study` 프로젝트는 전부 전용 SVG를 갖는 관례 — `chipthrone`만 없음.)
 - [x] 정직성 규칙 준수 ✅ — 실측만·측정 환경 명시·정직한 한계 명기(`agentic-rag-limit`은 미증명 그대로, `multi-turn-rewrite`는 작은 코퍼스 한계 명시). **채용·이직 프레이밍은 전면 배제하고 학습 목적을 명시**(연우님 지시).
 - [ ] **웹 UI 채팅 화면 캡처** → `web/public/projects/`에 넣고 개요에 삽입. **Gemini 키를 넣고 띄운 화면이어야 함**(기본 3B는 환각 75%).
 - [ ] (결정) Virtual Threads·Redis 캐시 devlog 추가 여부 — 지금은 뺐음(`realtime-sensor-pipeline`과 결 겹침·RAG 서사 밖). 추가 시 Grafana 캡처 필요(`docs/images/vthreads-*.png` 재활용 가능).
 - [ ] 이력서 반영: Skills(Spring AI·Elasticsearch·k6·Grafana 등) + 프로젝트 한 줄 → `personal`의 `web/content/resume.json` · `output/pdf/`
-- [x] ~~Products 등재 조건(실제 상시 운영·데모 가능한 배포)~~ — **해당 없음.** 배포하지 않기로 결정(2026-07-16, 로컬 실행만). 그래서 `category: study`로 간다.
+- [x] ~~Products 등재 조건(실제 상시 운영·데모 가능한 배포)~~ — **해당 없음.** 배포하지 않기로 결정(2026-07-16, 로컬 실행만). 최종 분류는 **`category: side`**(당초 이 근거로 `study`를 골랐으나, 이후 사이트 섹션·내비 재편에서 `side`로 바뀜 — 2026-07-16 연우님 확인, 의도한 변경. 형제 `chipthrone`과 같은 분류).
 
 ## 세션 시작 프롬프트 (복붙용)
 
