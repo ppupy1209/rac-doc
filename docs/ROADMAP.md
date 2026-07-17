@@ -70,11 +70,11 @@
 
 ### 과제 (직접 구현)
 
-- [ ] 현재 구조의 정합성 깨짐을 **테스트로 먼저 재현** (롤백 후 인덱스에 유령 청크가 남는 것을 증명)
-- [ ] 선택지 A~D 비교표를 채우고 결정 + 근거를 `docs/design-notes.md`에 기록
-- [ ] 선택한 구조 구현 (Outbox라면: outbox 테이블 V2 마이그레이션, relay, 멱등 처리 — 같은 이벤트 재적용에 안전하게)
-- [ ] 삭제 경로: 세대 스왑 구현, 재빌드 중 검색 가용성 확인
-- [ ] 장애 시나리오 검증: relay 죽였다 살리기 → 유실 0건 확인
+- [x] 현재 구조의 정합성 깨짐을 **테스트로 먼저 재현** ✅ Step 1 — `GhostIndexTest`로 **유령 2건 실측**(2026-07-06)
+- [x] 선택지 A~D 비교표를 채우고 결정 + 근거 기록 ✅ Step 2 — **C(Outbox+relay) 채택**, B 비교·E 보정 관점 (design-notes §3)
+- [x] 선택한 구조 구현 ✅ Step 3-1~3-4 — V2 마이그레이션·엔티티·create 경로(유령 0)·relay(멱등 2겹)
+- [x] 삭제 경로: 세대 스왑 ✅ Step 3-6 — `AtomicReference` 전환·delete를 outbox로 통일. **정정: 기존 `rebuild()`도 이미 원자 교체라 다운타임은 원래 ~0**이었고, 진짜 개선은 delete의 동기 전체 재빌드 제거
+- [x] 장애 시나리오 검증 ✅ Step 3-5 — 마킹 전 크래시 주입 → **유실 0·중복 0** 확인
 
 ### Step 1 세부 진행 — 유령 인덱스 재현 테스트 (세션 이어가기용 step-by-step 기록)
 
@@ -170,11 +170,11 @@
 
 ### 과제 (직접 구현)
 
-- [ ] golden set 설계·작성 (질문 선정 기준을 문서로 — 쉬운/어려운/모호한 질문 섞기)
-- [ ] hit rate@K 측정 러너 구현 (LLM 미사용, 결정적)
-- [ ] 환각률·인용 정확도 측정 러너 구현
-- [ ] **실험 매트릭스**: 청크 크기(예: 200/400/800자) × topK(2/4/8)로 hit rate 비교 → 표로 기록
-- [ ] 결과를 바탕으로 기본값 재결정 + 근거 기록
+- [x] golden set 설계·작성 ✅ B2-1·B2-2 — HR/총무 8문서·질문 50개, 기준은 `eval/README.md`. **2026-07-14 독립 검수로 사실 오류 0건 확인**(각주 3건은 design-notes §7)
+- [x] hit rate@K 러너 ✅ B2-3 — `HitRateEvalTest`, 기준선 **@4 93.3%**
+- [x] 환각률 러너 ✅ B2-4 — `HallucinationEvalTest`, 기준선 **환각 65%·오거부 0%**. ⚠️ **인용 정확도는 의도적으로 생략** — sources가 topK 검색결과라 **hit rate와 동일 신호**(B2-4 설계에 명시)
+- [x] **실험 매트릭스** ✅ B2-5 — `ChunkSizeMatrixEvalTest`. 200자는 파편화로 @4 73.3%, 400·800은 93.3% plateau
+- [x] 기본값 재결정 ✅ B2-5 — **청크 500·topK 4 유지**(실험이 현 기본값을 검증). 짧은 문서라 400/500/800을 구분 못 한 게 정직한 한계
 
 ### Step 세부 진행 (2026-07-07 결정: 사내 HR/총무 golden set + JUnit @Tag("eval") 러너)
 
@@ -255,7 +255,7 @@
 - [x] C2-5 ✅ (2026-07-12): B2 하네스로 프로바이더별 비교 — 환각률·오거부율·hit·토큰·비용·지연. Ollama vs 상용. **환각 바닥 돌파 증명 완료**. design-notes §4 표.
     - **1차 진행 (2026-07-12, 맥)**: ① 하네스 보강 — `[LLM-USAGE]` 요약(호출·degraded·토큰·비용·지연, provider 태그)·pacing 노브(`askwiki.eval.pacing-ms`)·evalTest 캐시 무효화(`outputs.upToDateWhen false`)·gradlew exec bit 복원. ② **Ollama 재기준선(같은 날·같은 머신 비교용): 환각 75.0%·오거부 10.0%**, 토큰 in 50,885/out 3,190, 지연 mean 8.8s/max 44.3s — B2(60%/3.3%)와의 차이는 실행 간 요동, 구간(60~75%)으로 해석. ③ **Gemini 2.5 무료 경로 실측으로 닫힘**: 2.5-flash **RPM 5·RPD 20**(50문항 러너 불가), 2.5-flash-lite 신규 사용자 차단, Spring AI는 429 비재시도. 3.1-flash-lite·3.5-flash 프로브 OK(`reasoning_effort:none` 정상). 실행 조건: 모델 warm-up + `ASKWIKI_LLM_CALL_TIMEOUT_MS=120000`(콜드 로드가 C2-4 가드 20s에 걸림) + Gemini `ASKWIKI_EVAL_PACING_MS=13000`. 함정 상세 design-notes §4.
     - **✅ 완료 (2026-07-12)**: 계정 한도표 확인 결과 3.5-flash도 무료 RPD 20 → **gemini-3.1-flash-lite(RPM 15·RPD 500)가 유일한 무료 완주 경로**로 확정·측정. **환각 0.0%(0/20)·오거부 6.7%(2/30)** vs 같은 날 Ollama 기준선 75.0%/10.0% — **바닥 돌파 + 두 지표 동시 개선**(B2 "진짜 레버는 모델" 진단 증명, 프롬프트와 달리 트레이드오프 곡선 자체를 밀었음). 지연 mean 637ms(vs 8,823ms CPU 추론), 출력 토큰 658(vs 3,190 — 1/5), 비용 $0. hit rate는 임베딩(nomic) 고정이라 프로바이더 무관(93.3% 유지). application.yml 기본 Gemini 모델 `gemini-3.1-flash-lite` 확정(회귀 19 그린). 비교표·해석·정직한 각주는 design-notes §4.
-- [ ] (선택) 저비용 단일 인스턴스 배포 — 상용 API로 Ollama 컨테이너 없이 경량 배포(백로그 배포 과제 해소).
+- [x] ~~(선택) 저비용 단일 인스턴스 배포~~ — **하지 않기로 결정**(2026-07-16, 연우님 — 로컬에서만 실행).
 
 ### 측정할 숫자 (목표)
 
@@ -302,8 +302,7 @@
 - [x] Step 1 ✅ (2026-07-12): **ES kNN + 자체 포트(`VectorIndex`) 어댑터** 결정(연우님) — 채택·기각 근거 design-notes §5
 - [x] Step 2 ✅ (2026-07-12): 포트 추출 → ES 인프라 → 어댑터 → B1 패턴 재증명, 전부 Codex 작성·Claude 검증. 2-1 `VectorIndex` 포트(동작 불변, `635431b`) · 2-2 ES compose 8.17.4+네이티브 클라이언트+스모크(`a7694e1`) · 2-3 `EsVectorIndex`(_id=chunkId 멱등·kNN·점수 역변환 2s−1·refresh 프로퍼티)+`askwiki.vector-index.impl` 스위치+계약 테스트 4(`89e5a10`) · 2-4 **B1 정합성 불변식 4종(유령 0·relay 반영+멱등·크래시 무유실·삭제 통합)을 ES 구현으로 재증명**(`66d9908`). 검증 중 Claude 수정 2건: 괄호 누락 컴파일 에러(2-3), **목 벡터 2차원→768차원**(ES가 dims 강제 — InMemory엔 없는 제약이라 B1 픽스처 복사 시 걸리는 함정, 2-4). 전체 스위트 11클래스 그린.
 - [x] Step 3 ✅ (2026-07-12): 이행 검증·측정 5종 완료 — 3-① hit rate 동등성(93.3 vs 90.0@4, `48e0838`) · 3-② 20k 스케일 벤치(지연 22.8→12.8ms·recall 0.83@nc100·dial·rebuild 배치 수정 `26e849c`) · 3-③ 반영 지연(ES refresh 계층 127→879ms `7cba2cc`) · 3-④ 기동 시간(ES 재시작 재빌드 0 vs 인메모리 6.3s) · 3-⑤ ETL 비교(Chunker=TokenTextSplitter, 짧은 문서 수렴 → Chunker 유지). 상세 design-notes §5.
-- [ ] (강의 접목 P1-②) Spring AI ETL vs Chunker ✅ 3-⑤에 흡수 — 짧은 문서라 수렴, Chunker 유지 결정.
-- [ ] (강의 접목 P1-②) Spring AI ETL(DocumentReader·TokenTextSplitter) vs 자체 Chunker+PDFBox — B2-5 매트릭스 재실행으로 비교, 채택은 결과로
+- [x] (강의 접목 P1-②) Spring AI ETL(DocumentReader·TokenTextSplitter) vs 자체 Chunker+PDFBox ✅ **Step 3-⑤에 흡수** — `EtlComparisonEvalTest`로 비교한 결과 **8/8 수렴**(짧은 문서라 둘이 같은 청킹을 낸다) → **Chunker 유지**. "채택은 결과로"라는 원칙대로, 결과가 차이를 못 만들어 바꾸지 않았다.
 
 ### 측정할 숫자 (목표)
 
@@ -388,7 +387,7 @@
 - [x] **B5-1 ✅ 완료 (2026-07-16)** — 포트 확장 + ES 본문 색인. **동작 불변 리팩터 + 데이터 확장**(새 인자는 아직 아무도 안 쓴다). Codex 위임·Claude 검증, **전체 69 그린**(68→+1). 결정 = **A안(포트 확장)**: `search(String queryText, float[] queryVector, int topK)`, InMemory는 queryText를 무시(어휘 검색 불가, 주석으로 명시), 벤치 경로는 랜덤 벡터라 `null` 전달. ES 매핑에 `content`(text·standard 분석기) 추가 + `add`/`rebuild`가 본문 색인. **본문 하이드레이션은 MySQL 유지**(ES의 content는 *검색용 필드*이지 진실의 원천이 아니다). `BULK_BATCH_SIZE=500` 유지 — 벡터 3KB(768×4B)가 본문 ~1.5KB를 지배하므로 C1의 OOM 교훈이 그대로 유효(Codex 판단·근거 주석).
     - **부수 개선 (검증 중 발견)**: `_source` 필터를 넣으며 **`vector`도 읽기에서 빠졌다** — 그동안 검색 히트마다 768 float를 되받고 있었다. 검색 경로는 vector를 안 쓰므로 안전하고 오히려 빨라진다. ⚠️ **단 C1이 기록한 ES 20k 지연(avg 12.84ms)은 벡터를 되받던 조건의 숫자**다 → B5-3에서 그걸 기준선으로 쓰지 말 것(조건이 달라졌다).
     - 🚧 **B5-2 선결 과제 발견 (Claude 검증)**: **기존 ES 인덱스는 옛 매핑이라 본문이 없다.** 살아있는 로컬 인덱스 실측 — `askwiki-chunks`의 필드가 `documentId, seq, vector`뿐이고 문서 8건 전부 `content` 없음. `rebuild()`는 delete→create라 부르면 해결되지만 **ES 모드는 기동 시 rebuild를 하지 않는다**(C1이 "기동 재빌드 0 vs 인메모리 6.3s"로 이점이라 기록한 바로 그 성질의 **뒷면**). → B5-2에서 BM25를 켜면 **기존 데이터가 조용히 0건**이 된다. **스키마를 바꿨는데 기존 데이터가 따라오지 않는다 = B1이 다룬 정합성의 사촌.**
-- [ ] **B5-2 구현** (착수 2026-07-16). BM25 질의 + kNN 질의 → **자체 RRF 융합**. `askwiki.search.hybrid` 스위치(기본 off) — C3-2의 "기본 off + 결정적 스위트 불변" 선례.
+- [x] **B5-2 구현 ✅ 완료 (2026-07-16)** — Codex 위임·Claude 검증, **74 그린**(69→+5). 아래 결정 2건 그대로 반영. BM25 질의 + kNN 질의 → **자체 RRF 융합**. `askwiki.search.hybrid` 스위치(기본 off) — C3-2의 "기본 off + 결정적 스위트 불변" 선례.
     - **결정 ① 재색인 = 하이브리드 on일 때만 요구** (연우님, 2026-07-16). 기본(off) 경로는 **C1의 "기동 재빌드 0"을 그대로 지킨다 — 대가는 스위치를 켠 사람만 치른다.** 판정은 매핑 유무가 아니라 **본문 없는 문서의 존재**로 한다(옛 인덱스에 새 `add`가 들어가면 ES 동적 매핑이 `content`를 만들어 버려 매핑 검사는 그 경우를 놓친다 — 데이터를 직접 묻는 편이 정직하다). 멱등: 이미 채워져 있으면 아무 일도 안 한다.
     - **결정 ② 하이브리드에서 `ChunkMatch.score`는 RRF 융합 점수**다(코사인 아님). 순위가 두 신호의 융합이라 단일 코사인으로 표현할 수 없고, 억지로 코사인을 채우면 "이 순위가 유사도 때문"이라는 **거짓 인상**을 준다. **알려진 대가(부채로 남기지 않으려 여기 명시)**: 웹 UI 툴팁이 `유사도 ${score}`라 하이브리드 on에선 문구가 부정확해진다. 기본 off라 현재 사용자 영향은 0이고, **B5-4에서 하이브리드를 기본값으로 승격한다면 그때 UI 문구를 함께 고치는 것이 승격의 조건**이다. `ScoreDistributionEvalTest`(B2 임계값 조사)도 벡터 모드 전용으로 남는다.
 - [x] **B5-3 측정 ✅ 완료 (2026-07-16) — 얇다던 헤드룸이 얇지 않았다** ⭐. 하네스 `HybridSearchMatrixEvalTest`(`@Tag("eval")`, Claude 직접 작성 — 측정은 이 레포에서 위임 불가). 선행으로 `askwiki.es.num-candidates` 노브 추출(기본 0 = 기존 공식, **운영 동작 불변** — B2-5가 청크 크기를 설정화한 것과 같은 패턴). **결정적 스위트 74 그린 유지**.
@@ -450,7 +449,7 @@
 - [x] 아키텍처 다이어그램 3중 구조 등록 ✅ — `architecture.ts` + `arch/AskWikiArch.tsx` + `ArchitectureDiagram` DIAGRAMS 맵. RAG 흐름 5노드(질문→임베딩→벡터검색→프롬프트조립→답변+출처)라 **기초 이해에도 기여**. (`study` 프로젝트는 전부 전용 SVG를 갖는 관례 — `chipthrone`만 없음.)
 - [x] 정직성 규칙 준수 ✅ — 실측만·측정 환경 명시·정직한 한계 명기(`agentic-rag-limit`은 미증명 그대로, `multi-turn-rewrite`는 작은 코퍼스 한계 명시). **채용·이직 프레이밍은 전면 배제하고 학습 목적을 명시**(연우님 지시).
 - [x] **웹 UI 채팅 화면 캡처** ✅ (2026-07-17 재촬영·커밋 — 2026-07-16 촬영분은 **커밋 누락으로 공개 페이지가 깨져 있었다**). 맥 사본 `/Users/kimyeonwoo/yeonwoo-dev`의 브랜치 `fix/web-ask-wiki-chat-capture` 커밋 `3179a1c` → `web/public/projects/ask-wiki-chat.png`. **PR #44로 머지·배포 완료** — 라이브 실측 `HTTP 200`·`naturalWidth 2880`·`broken: false`, 캐시 age 43,700초→0초(404 캐시가 갈렸다). 조건: Gemini + **하이브리드 on** · 찍기 전 `FLUSHALL` · 2턴 정답 · 출처 4개(두 턴 다 `급여 규정` 1위) · 실지연 922ms/1.2s. 턴 2가 C3-3을 그림으로 보여준다(`"그날이 휴일이면요?"` → `"급여 지급일인 25일이 휴일인 경우…"`).
-- [ ] (결정) Virtual Threads·Redis 캐시 devlog 추가 여부 — 지금은 뺐음(`realtime-sensor-pipeline`과 결 겹침·RAG 서사 밖). 추가 시 Grafana 캡처 필요(`docs/images/vthreads-*.png` 재활용 가능).
+- [x] ~~(결정) Virtual Threads·Redis 캐시 devlog 추가~~ — **하지 않기로 결정**(2026-07-17, 연우님). `realtime-sensor-pipeline`과 결이 겹치고 RAG 서사 밖이라는 판단 유지. 측정치(처리량 538→1,257 req/s·캐시 8,139ms→0ms)와 Grafana 캡처(`docs/images/vthreads-*.png`)는 남아 있으니 나중에 마음이 바뀌면 재활용 가능.
 - [x] 이력서 반영 ✅ (2026-07-17) — **PR #45 머지·배포 완료**(라이브 확인). 덤으로 **헤딩 폰트 OS 의존 발견·수정(PR #46)** — `Arial`에 `font-weight: 800`인데 Arial엔 800이 없어 브라우저가 고르는 값이 OS마다 달랐다(윈도우 Arial Black / 맥 Arial Bold) → PDF 굵기가 생성한 PC에 따라 달라졌다. **900으로는 안 고쳐진다(실측: PDF 1바이트도 불변)** — Arial Black은 별개 패밀리라 `--resume-heading-font`로 이름을 명시해 해결. 프로젝트 `Ask Wiki · 사내 문서 RAG 챗봇`을 CHIP·THRONE 뒤(side→study 순서)에 **두 줄**로: 환각률 **75%→0%**(golden set 하네스) · hit rate@1 **36.7%→90.0%**(BM25+kNN RRF). Skills는 Spring AI·Elasticsearch·Grafana·Prometheus **전부 Exposure**(연우님 판정 — 학습 목적 한 건에서 쓴 기술이라는 정직한 배치. k6는 이미 Familiar에 있었다). PDF 재생성 → **1페이지 유지 확인**.
 - [x] ~~Products 등재 조건(실제 상시 운영·데모 가능한 배포)~~ — **해당 없음.** 배포하지 않기로 결정(2026-07-16, 로컬 실행만). 최종 분류는 **`category: side`**(당초 이 근거로 `study`를 골랐으나, 이후 사이트 섹션·내비 재편에서 `side`로 바뀜 — 2026-07-16 연우님 확인, 의도한 변경. 형제 `chipthrone`과 같은 분류).
 
